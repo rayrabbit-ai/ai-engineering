@@ -13,8 +13,20 @@ def test_expression_evaluation_subtraction_and_addition(engine: SafeMathEngine):
     assert result == 85
 
 @pytest.mark.integration
+def test_expression_evaluation_power_and_modulo(engine: SafeMathEngine):
+    assert engine.evaluate_simple("2 ^ 3 + 10 % 3") == 9
+    assert engine.evaluate_simple("10 + 20 / 4 - 3 ^ 2") == 6
+    assert engine.evaluate_simple("15 % 4 * 2 ^ 3") == 24
+
+@pytest.mark.integration
+def test_expression_evaluation_division_or_modulo_by_zero_returns_none(engine: SafeMathEngine):
+    assert engine.evaluate_simple("10 / 0") is None
+    assert engine.evaluate_simple("10 % 0") is None
+
+@pytest.mark.integration
 def test_invalid_expression_raises_value_error(engine: SafeMathEngine):
     with pytest.raises(ValueError):
         engine.evaluate_simple("10 + * 5")
     with pytest.raises(ValueError):
         engine.evaluate_simple("")
+

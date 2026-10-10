@@ -10,7 +10,11 @@ def test_full_mathematical_workflow_pipeline(engine: SafeMathEngine):
         ("10 + 20", 30),
         ("50 - 15 * 2", 20),
         ("100 * 2 + 50", 250),
+        ("2 ^ 3 + 10 % 3", 9),
+        ("100 / 4 - 2 ^ 4", 9),
+        ("10 / 0", None),
     ]
+
 
     for expr, expected in pipeline_inputs:
         result = engine.evaluate_simple(expr)

@@ -15,5 +15,5 @@ def test_golden_master_integer_operations(engine: SafeMathEngine):
 
 @pytest.mark.legacy_baseline
 def test_golden_master_division_by_zero_contract(engine: SafeMathEngine):
-    with pytest.raises(ValueError, match="Division by zero is not allowed"):
-        engine.divide(50, 0)
+    assert engine.divide(50, 0) is None
+

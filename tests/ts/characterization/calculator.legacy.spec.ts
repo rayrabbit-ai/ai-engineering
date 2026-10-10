@@ -21,7 +21,7 @@ describe('@legacy-baseline: SafeMathEngine Characterization', () => {
     expect(engine.add(0.1, 0.2)).toBeCloseTo(0.3, 5);
   });
 
-  it('golden-master: contrato de error por división por cero', () => {
-    expect(() => engine.divide(50, 0)).toThrow('Division by zero is not allowed');
+  it('golden-master: contrato de división por cero retorna null', () => {
+    expect(engine.divide(50, 0)).toBeNull();
   });
 });

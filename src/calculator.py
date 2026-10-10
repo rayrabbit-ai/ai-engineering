@@ -44,47 +44,94 @@ class SafeMathEngine:
         return self.power(a, b)
 
 
-    def evaluate_simple(self, expr: str) -> Number:
-        """
-        Evalúa expresiones aritméticas básicas (+, -, *) de forma segura
-        sin recurrir a eval() inseguro.
-        """
+    def evaluate_simple(self, expr: str) -> Optional[Number]:
+        """Evalúa expresiones aritméticas (+, -, *, /, %, ^) deterministamente."""
+        tokens = self._tokenize(expr)
+        after_powers = self._reduce_powers(tokens)
+        after_mult_div = self._reduce_mult_div(after_powers)
+        if after_mult_div is None:
+            return None
+        return self._reduce_add_sub(after_mult_div)
+
+    def _tokenize(self, expr: str) -> list[str]:
         if not isinstance(expr, str) or not expr.strip():
             raise ValueError("Expression must be a non-empty string")
-
-        tokens = expr.replace("+", " + ").replace("-", " - ").replace("*", " * ").split()
+        spaced = expr.replace("^", " ^ ").replace("*", " * ").replace("/", " / ")
+        spaced = spaced.replace("%", " % ").replace("+", " + ").replace("-", " - ")
+        tokens = spaced.split()
         if not tokens:
             raise ValueError("Empty expression")
+        return tokens
 
-        # Parser simple de precedencia
-        # Fase 1: Multiplicaciones
+    def _reduce_powers(self, tokens: list[str]) -> list[Union[Number, str]]:
+        reduced: list[Union[Number, str]] = []
         i = 0
-        reduced_tokens: list[Union[Number, str]] = []
         while i < len(tokens):
             token = tokens[i]
-            if token == "*":
-                if not reduced_tokens or i + 1 >= len(tokens):
-                    raise ValueError("Malformed multiplication syntax")
-                prev = reduced_tokens.pop()
+            if token == "^":
+                if not reduced or i + 1 >= len(tokens):
+                    raise ValueError("Malformed power syntax")
+                prev = reduced.pop()
+                if not isinstance(prev, (int, float)):
+                    raise ValueError("Malformed power syntax")
                 nxt = self._parse_num(tokens[i + 1])
-                reduced_tokens.append(float(prev) * nxt)
+                reduced.append(self.power(prev, nxt))
+                i += 2
+            elif token in ("*", "/", "%", "+", "-"):
+                reduced.append(token)
+                i += 1
+            else:
+                reduced.append(self._parse_num(token))
+                i += 1
+        return reduced
+
+    def _reduce_mult_div(
+        self, tokens: list[Union[Number, str]]
+    ) -> Optional[list[Union[Number, str]]]:
+        reduced: list[Union[Number, str]] = []
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token in ("*", "/", "%"):
+                if not reduced or i + 1 >= len(tokens):
+                    raise ValueError(f"Malformed {token} syntax")
+                prev = reduced.pop()
+                if not isinstance(prev, (int, float)):
+                    raise ValueError(f"Malformed {token} syntax")
+                nxt_token = tokens[i + 1]
+                nxt = (
+                    nxt_token
+                    if isinstance(nxt_token, (int, float))
+                    else self._parse_num(str(nxt_token))
+                )
+                res = self._apply_mult_div_op(token, prev, nxt)
+                if res is None:
+                    return None
+                reduced.append(res)
                 i += 2
             else:
-                if token in ("+", "-"):
-                    reduced_tokens.append(token)
-                else:
-                    reduced_tokens.append(self._parse_num(token))
+                reduced.append(token)
                 i += 1
+        return reduced
 
-        # Fase 2: Sumas y Restas
-        if not reduced_tokens:
+    def _apply_mult_div_op(self, op: str, a: Number, b: Number) -> Optional[Number]:
+        if op == "*":
+            return self.multiply(a, b)
+        if op == "/":
+            return self.divide(a, b)
+        return self.modulo(a, b)
+
+    def _reduce_add_sub(self, tokens: list[Union[Number, str]]) -> Number:
+        if not tokens:
             raise ValueError("Empty token list")
-
-        result = float(reduced_tokens[0])
+        result = tokens[0]
+        if not isinstance(result, (int, float)):
+            raise ValueError("Malformed expression syntax")
+        result = float(result)
         idx = 1
-        while idx < len(reduced_tokens):
-            op = reduced_tokens[idx]
-            val = float(reduced_tokens[idx + 1])
+        while idx < len(tokens):
+            op = tokens[idx]
+            val = float(tokens[idx + 1])
             if op == "+":
                 result += val
             elif op == "-":
@@ -92,8 +139,8 @@ class SafeMathEngine:
             else:
                 raise ValueError(f"Unknown operator: {op}")
             idx += 2
-
         return int(result) if result.is_integer() else result
+
 
     def _validate_number(self, *args: Number) -> None:
         for val in args:

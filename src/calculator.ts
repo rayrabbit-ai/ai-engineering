@@ -51,56 +51,107 @@ export class SafeMathEngine {
   }
 
 
-  evaluateSimple(expr: string): MathNumber {
+  evaluateSimple(expr: string): MathNumber | null {
+    const tokens = this.tokenize(expr);
+    const afterPowers = this.reducePowers(tokens);
+    const afterMultDiv = this.reduceMultDiv(afterPowers);
+    if (afterMultDiv === null) {
+      return null;
+    }
+    return this.reduceAddSub(afterMultDiv);
+  }
+
+  private tokenize(expr: string): string[] {
     if (typeof expr !== 'string' || !expr.trim()) {
       throw new Error('Expression must be a non-empty string');
     }
-
-    const tokens = expr.replace(/\+/g, ' + ').replace(/-/g, ' - ').replace(/\*/g, ' * ').trim().split(/\s+/);
-    if (tokens.length === 0) {
+    const spaced = expr
+      .replace(/\^/g, ' ^ ')
+      .replace(/\*/g, ' * ')
+      .replace(/\//g, ' / ')
+      .replace(/%/g, ' % ')
+      .replace(/\+/g, ' + ')
+      .replace(/-/g, ' - ');
+    const tokens = spaced.trim().split(/\s+/);
+    if (tokens.length === 0 || tokens[0] === '') {
       throw new Error('Empty expression');
     }
+    return tokens;
+  }
 
-    // Fase 1: Multiplicaciones
-    const reducedTokens: Array<MathNumber | string> = [];
+  private reducePowers(tokens: string[]): Array<MathNumber | string> {
+    const reduced: Array<MathNumber | string> = [];
     let i = 0;
     while (i < tokens.length) {
       const token = tokens[i];
-      if (token === '*') {
-        if (reducedTokens.length === 0 || i + 1 >= tokens.length) {
-          throw new Error('Malformed multiplication syntax');
+      if (token === '^') {
+        if (reduced.length === 0 || i + 1 >= tokens.length) {
+          throw new Error('Malformed power syntax');
         }
-        const prev = reducedTokens.pop() as MathNumber;
+        const prev = reduced.pop();
+        if (typeof prev !== 'number') throw new Error('Malformed power syntax');
         const nxt = this.parseNum(tokens[i + 1]);
-        reducedTokens.push(prev * nxt);
+        reduced.push(this.power(prev, nxt));
         i += 2;
-      } else if (token === '+' || token === '-') {
-        reducedTokens.push(token);
+      } else if (['*', '/', '%', '+', '-'].includes(token)) {
+        reduced.push(token);
         i += 1;
       } else {
-        reducedTokens.push(this.parseNum(token));
+        reduced.push(this.parseNum(token));
         i += 1;
       }
     }
+    return reduced;
+  }
 
-    // Fase 2: Sumas y restas
-    let result = reducedTokens[0] as MathNumber;
-    let idx = 1;
-    while (idx < reducedTokens.length) {
-      const op = reducedTokens[idx];
-      const val = reducedTokens[idx + 1] as MathNumber;
-      if (op === '+') {
-        result += val;
-      } else if (op === '-') {
-        result -= val;
+  private reduceMultDiv(tokens: Array<MathNumber | string>): Array<MathNumber | string> | null {
+    const reduced: Array<MathNumber | string> = [];
+    let i = 0;
+    while (i < tokens.length) {
+      const token = tokens[i];
+      if (token === '*' || token === '/' || token === '%') {
+        if (reduced.length === 0 || i + 1 >= tokens.length) {
+          throw new Error(`Malformed ${token} syntax`);
+        }
+        const prev = reduced.pop();
+        if (typeof prev !== 'number') throw new Error(`Malformed ${token} syntax`);
+        const nxtToken = tokens[i + 1];
+        const nxt = typeof nxtToken === 'number' ? nxtToken : this.parseNum(nxtToken);
+        const res = this.applyOp(token, prev, nxt);
+        if (res === null) return null;
+        reduced.push(res);
+        i += 2;
       } else {
-        throw new Error(`Unknown operator: ${op}`);
+        reduced.push(token);
+        i += 1;
       }
+    }
+    return reduced;
+  }
+
+  private applyOp(op: string, a: MathNumber, b: MathNumber): MathNumber | null {
+    if (op === '*') return this.multiply(a, b);
+    if (op === '/') return this.divide(a, b);
+    return this.modulo(a, b);
+  }
+
+  private reduceAddSub(tokens: Array<MathNumber | string>): MathNumber {
+    if (tokens.length === 0) throw new Error('Empty expression');
+    let result = tokens[0];
+    if (typeof result !== 'number') throw new Error('Malformed expression syntax');
+    let idx = 1;
+    while (idx < tokens.length) {
+      const op = tokens[idx];
+      const val = tokens[idx + 1];
+      if (typeof val !== 'number') throw new Error('Malformed expression syntax');
+      if (op === '+') result = this.add(result, val);
+      else if (op === '-') result = this.subtract(result, val);
+      else throw new Error(`Unknown operator: ${op}`);
       idx += 2;
     }
-
     return result;
   }
+
 
   private validateNumber(...args: MathNumber[]): void {
     for (const val of args) {

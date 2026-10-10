@@ -21,13 +21,35 @@ export class SafeMathEngine {
     return a * b;
   }
 
-  divide(a: MathNumber, b: MathNumber): MathNumber {
+  divide(a: MathNumber, b: MathNumber): MathNumber | null {
     this.validateNumber(a, b);
     if (b === 0) {
-      throw new Error('Division by zero is not allowed');
+      return null;
     }
     return a / b;
   }
+
+  modulo(a: MathNumber, b: MathNumber): MathNumber | null {
+    this.validateNumber(a, b);
+    if (b === 0) {
+      return null;
+    }
+    return a % b;
+  }
+
+  mod(a: MathNumber, b: MathNumber): MathNumber | null {
+    return this.modulo(a, b);
+  }
+
+  power(a: MathNumber, b: MathNumber): MathNumber {
+    this.validateNumber(a, b);
+    return Math.pow(a, b);
+  }
+
+  pow(a: MathNumber, b: MathNumber): MathNumber {
+    return this.power(a, b);
+  }
+
 
   evaluateSimple(expr: string): MathNumber {
     if (typeof expr !== 'string' || !expr.trim()) {

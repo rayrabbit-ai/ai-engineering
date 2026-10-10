@@ -2,7 +2,7 @@
 Módulo de cálculo matemático determinista (RayRabbit AI Engineering).
 """
 
-from typing import Union
+from typing import Union, Optional
 
 Number = Union[int, float]
 
@@ -21,11 +21,28 @@ class SafeMathEngine:
         self._validate_number(a, b)
         return a * b
 
-    def divide(self, a: Number, b: Number) -> float:
+    def divide(self, a: Number, b: Number) -> Optional[float]:
         self._validate_number(a, b)
         if b == 0:
-            raise ValueError("Division by zero is not allowed")
+            return None
         return a / b
+
+    def modulo(self, a: Number, b: Number) -> Optional[Number]:
+        self._validate_number(a, b)
+        if b == 0:
+            return None
+        return a % b
+
+    def mod(self, a: Number, b: Number) -> Optional[Number]:
+        return self.modulo(a, b)
+
+    def power(self, a: Number, b: Number) -> Number:
+        self._validate_number(a, b)
+        return a ** b
+
+    def pow(self, a: Number, b: Number) -> Number:
+        return self.power(a, b)
+
 
     def evaluate_simple(self, expr: str) -> Number:
         """

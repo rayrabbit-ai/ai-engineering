@@ -1,0 +1,90 @@
+name: "Gate Validator (Deterministic AI Engineering)"
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+  push:
+    branches: [main]
+
+jobs:
+  validate-gate-commits:
+    name: "Auditoría de Commits por Compuerta (Invariantes 1 y 3)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio con historial completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validar Nomenclatura y Causalidad TDD (Node.js)
+        run: |
+          node scripts/verify-gates.mjs --base origin/${{ github.base_ref || 'main' }} --head HEAD
+
+  validate-openspec:
+    name: "Validación de Especificaciones OpenSpec"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validar Coherencia de Especificaciones
+        run: |
+          npx --yes @fission-ai/openspec validate
+
+  test-typescript:
+    name: "Suite TypeScript / Node.js & Cobertura"
+    runs-on: ubuntu-latest
+    if: hashFiles('package.json') != ''
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependencias
+        run: npm ci || npm install
+
+      - name: Legacy-Guard (Suite de Caracterización @legacy-baseline)
+        run: npm run test:ts:baseline
+
+      - name: Tests Unitarios e Integración con Cobertura Mínima (≥80%)
+        run: npm run test:ts:coverage
+
+  test-python:
+    name: "Suite Python & Cobertura"
+    runs-on: ubuntu-latest
+    if: hashFiles('pyproject.toml') != ''
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          pip install -e .[test]
+
+      - name: Legacy-Guard (Suite de Caracterización @legacy_baseline)
+        run: |
+          pytest -m legacy_baseline --tb=short
+
+      - name: Tests Unitarios e Integración con Cobertura Mínima (≥80%)
+        run: |
+          pytest -m "unit or integration" --cov=src --cov-fail-under=80 --cov-report=term-missing

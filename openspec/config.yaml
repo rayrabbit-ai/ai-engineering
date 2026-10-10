@@ -1,0 +1,20 @@
+schema: spec-driven
+
+context: |
+  Project: AI Engineering Deterministic Template (RayRabbit AI)
+  Methodology: Spec-Driven Development (SDD) + Strict Test-Driven Development (TDD).
+  Core Invariant: Zero production code without approved specification and verified failing test (RED) in terminal.
+  Architecture: Modular, decoupled contracts, multi-layer testing (unit, integration, legacy-baseline, e2e).
+
+rules:
+  proposal:
+    - "Describe exact scope, motivation, architecture impact, and rollback plan if modifying contracts."
+  specs:
+    - "Given/When/Then format required for all acceptance scenarios."
+    - "Define unequivocal acceptance criteria and edge cases."
+  design:
+    - "Include Mermaid sequence or architecture diagrams for module interactions."
+    - "Detail interfaces, error handling, and state management."
+  tasks:
+    - "Atomic tasks referencing real source and test files."
+    - "Strict gate order: test(red) -> feat(green) -> refactor -> test(integration) -> hardening."

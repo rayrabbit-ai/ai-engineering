@@ -1,0 +1,51 @@
+{
+  "name": "@rayrabbit-ai/ai-engineering",
+  "version": "1.0.0",
+  "description": "Deterministic AI Engineering Template: Polyglot (TypeScript + Python) SDD + Strict TDD + CI Gates",
+  "type": "module",
+  "keywords": [
+    "ai-engineering",
+    "typescript",
+    "python",
+    "tdd",
+    "sdd",
+    "openspec",
+    "vitest",
+    "pytest",
+    "antigravity",
+    "cursor",
+    "claude-code"
+  ],
+  "author": "RayRabbit AI <dev@rayrabbit.com> (https://github.com/rayrabbit-ai)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rayrabbit-ai/ai-engineering.git"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "spec:list": "openspec list",
+    "spec:validate": "openspec validate",
+    "spec:view": "openspec view",
+    "test:ts": "vitest run",
+    "test:ts:unit": "vitest run tests/ts/unit",
+    "test:ts:integration": "vitest run tests/ts/integration",
+    "test:ts:baseline": "vitest run tests/ts/characterization",
+    "test:ts:coverage": "vitest run --coverage",
+    "test:py": "pytest",
+    "test:py:coverage": "pytest --cov=src --cov-fail-under=80 --cov-report=term-missing",
+    "verify:gates": "node scripts/verify-gates.mjs",
+    "verify:gates:py": "python scripts/verify_gates.py",
+    "guard": "node scripts/guard-agent.mjs",
+    "prepare": "node scripts/guard-agent.mjs"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "^1.6.0",
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.3.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.3.0"
+  }
+}

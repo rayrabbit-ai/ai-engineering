@@ -27,8 +27,25 @@ describe('SafeMathEngine Unit Tests', () => {
     expect(engine.divide(20, 4)).toBe(5);
   });
 
-  it('debe arrojar error ante división por cero', () => {
-    expect(() => engine.divide(10, 0)).toThrow('Division by zero is not allowed');
+  it('debe devolver null ante división por cero', () => {
+    expect(engine.divide(10, 0)).toBeNull();
+  });
+
+  it('debe calcular módulo correctamente', () => {
+    expect(engine.modulo(10, 3)).toBe(1);
+    expect(engine.modulo(20, 6)).toBe(2);
+    expect(engine.mod(10, 3)).toBe(1);
+  });
+
+  it('debe devolver null ante módulo por cero', () => {
+    expect(engine.modulo(10, 0)).toBeNull();
+  });
+
+  it('debe calcular potencias correctamente', () => {
+    expect(engine.power(2, 3)).toBe(8);
+    expect(engine.power(5, 0)).toBe(1);
+    expect(engine.power(3, 2)).toBe(9);
+    expect(engine.pow(2, 3)).toBe(8);
   });
 
   it('debe validar tipos estrictamente', () => {
@@ -36,5 +53,10 @@ describe('SafeMathEngine Unit Tests', () => {
     expect(() => engine.add('10', 5)).toThrow(TypeError);
     // @ts-expect-error probando valor NaN
     expect(() => engine.multiply(NaN, 5)).toThrow(TypeError);
+    // @ts-expect-error probando paso de argumento inválido en modulo
+    expect(() => engine.modulo('10', 3)).toThrow(TypeError);
+    // @ts-expect-error probando paso de argumento inválido en power
+    expect(() => engine.power('2', 3)).toThrow(TypeError);
   });
 });
+

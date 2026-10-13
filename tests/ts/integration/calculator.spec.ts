@@ -23,6 +23,12 @@ describe('SafeMathEngine Integration Tests', () => {
     expect(engine.evaluateSimple('15 % 4 * 2 ^ 3')).toBe(24);
   });
 
+  it('debe evaluar expresiones con potencias de exponentes negativos', () => {
+    expect(engine.evaluateSimple('2 ^ -2')).toBe(0.25);
+    expect(engine.evaluateSimple('2 ^ -1 + 0.5')).toBe(1);
+    expect(engine.evaluateSimple('0 ^ -2')).toBeNull();
+  });
+
   it('debe retornar null en expresiones con división o módulo por cero', () => {
     expect(engine.evaluateSimple('10 / 0')).toBeNull();
     expect(engine.evaluateSimple('10 % 0')).toBeNull();

@@ -48,6 +48,19 @@ describe('SafeMathEngine Unit Tests', () => {
     expect(engine.pow(2, 3)).toBe(8);
   });
 
+  it('debe calcular potencias con exponentes negativos', () => {
+    expect(engine.power(2, -2)).toBe(0.25);
+    expect(engine.power(2, -1)).toBe(0.5);
+    expect(engine.power(10, -2)).toBe(0.01);
+    expect(engine.power(-2, -3)).toBe(-0.125);
+    expect(engine.pow(2, -2)).toBe(0.25);
+  });
+
+  it('debe retornar null ante base 0 con exponente negativo', () => {
+    expect(engine.power(0, -1)).toBeNull();
+    expect(engine.power(0, -2)).toBeNull();
+  });
+
   it('debe validar tipos estrictamente', () => {
     // @ts-expect-error probando paso de argumento inválido en runtime
     expect(() => engine.add('10', 5)).toThrow(TypeError);

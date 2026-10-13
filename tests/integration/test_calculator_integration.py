@@ -19,6 +19,12 @@ def test_expression_evaluation_power_and_modulo(engine: SafeMathEngine):
     assert engine.evaluate_simple("15 % 4 * 2 ^ 3") == 24
 
 @pytest.mark.integration
+def test_expression_evaluation_negative_powers(engine: SafeMathEngine):
+    assert engine.evaluate_simple("2 ^ -2") == 0.25
+    assert engine.evaluate_simple("2 ^ -1 + 0.5") == 1
+    assert engine.evaluate_simple("0 ^ -2") is None
+
+@pytest.mark.integration
 def test_expression_evaluation_division_or_modulo_by_zero_returns_none(engine: SafeMathEngine):
     assert engine.evaluate_simple("10 / 0") is None
     assert engine.evaluate_simple("10 % 0") is None

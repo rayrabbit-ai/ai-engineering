@@ -36,11 +36,14 @@ class SafeMathEngine:
     def mod(self, a: Number, b: Number) -> Optional[Number]:
         return self.modulo(a, b)
 
-    def power(self, a: Number, b: Number) -> Number:
+    def power(self, a: Number, b: Number) -> Optional[Number]:
         self._validate_number(a, b)
-        return a ** b
+        if a == 0 and b < 0:
+            return None
+        res = a ** b
+        return int(res) if isinstance(res, float) and res.is_integer() else res
 
-    def pow(self, a: Number, b: Number) -> Number:
+    def pow(self, a: Number, b: Number) -> Optional[Number]:
         return self.power(a, b)
 
 
@@ -48,6 +51,8 @@ class SafeMathEngine:
         """Evalúa expresiones aritméticas (+, -, *, /, %, ^) deterministamente."""
         tokens = self._tokenize(expr)
         after_powers = self._reduce_powers(tokens)
+        if after_powers is None:
+            return None
         after_mult_div = self._reduce_mult_div(after_powers)
         if after_mult_div is None:
             return None
@@ -63,7 +68,7 @@ class SafeMathEngine:
             raise ValueError("Empty expression")
         return tokens
 
-    def _reduce_powers(self, tokens: list[str]) -> list[Union[Number, str]]:
+    def _reduce_powers(self, tokens: list[str]) -> Optional[list[Union[Number, str]]]:
         reduced: list[Union[Number, str]] = []
         i = 0
         while i < len(tokens):
@@ -74,9 +79,20 @@ class SafeMathEngine:
                 prev = reduced.pop()
                 if not isinstance(prev, (int, float)):
                     raise ValueError("Malformed power syntax")
-                nxt = self._parse_num(tokens[i + 1])
-                reduced.append(self.power(prev, nxt))
-                i += 2
+                consumed = 1
+                if tokens[i + 1] == "-" and i + 2 < len(tokens):
+                    nxt = -self._parse_num(tokens[i + 2])
+                    consumed = 2
+                elif tokens[i + 1] == "+" and i + 2 < len(tokens):
+                    nxt = self._parse_num(tokens[i + 2])
+                    consumed = 2
+                else:
+                    nxt = self._parse_num(tokens[i + 1])
+                res = self.power(prev, nxt)
+                if res is None:
+                    return None
+                reduced.append(res)
+                i += 1 + consumed
             elif token in ("*", "/", "%", "+", "-"):
                 reduced.append(token)
                 i += 1
@@ -98,17 +114,36 @@ class SafeMathEngine:
                 prev = reduced.pop()
                 if not isinstance(prev, (int, float)):
                     raise ValueError(f"Malformed {token} syntax")
-                nxt_token = tokens[i + 1]
-                nxt = (
-                    nxt_token
-                    if isinstance(nxt_token, (int, float))
-                    else self._parse_num(str(nxt_token))
-                )
+                consumed = 1
+                if tokens[i + 1] == "-" and i + 2 < len(tokens):
+                    nxt_token = tokens[i + 2]
+                    nxt_val = (
+                        nxt_token
+                        if isinstance(nxt_token, (int, float))
+                        else self._parse_num(str(nxt_token))
+                    )
+                    nxt = -nxt_val
+                    consumed = 2
+                elif tokens[i + 1] == "+" and i + 2 < len(tokens):
+                    nxt_token = tokens[i + 2]
+                    nxt = (
+                        nxt_token
+                        if isinstance(nxt_token, (int, float))
+                        else self._parse_num(str(nxt_token))
+                    )
+                    consumed = 2
+                else:
+                    nxt_token = tokens[i + 1]
+                    nxt = (
+                        nxt_token
+                        if isinstance(nxt_token, (int, float))
+                        else self._parse_num(str(nxt_token))
+                    )
                 res = self._apply_mult_div_op(token, prev, nxt)
                 if res is None:
                     return None
                 reduced.append(res)
-                i += 2
+                i += 1 + consumed
             else:
                 reduced.append(token)
                 i += 1

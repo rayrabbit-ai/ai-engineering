@@ -25,6 +25,10 @@ El sistema SHALL calcular sumas, restas, multiplicaciones, divisiones, operacion
 #### Scenario: Operación de potencia
 - **WHEN** se invoca `power(2, 3)`
 - **THEN** el motor debe retornar `8`
+- **WHEN** se invoca `power(2, -2)`
+- **THEN** el motor debe retornar `0.25`
+- **WHEN** se invoca `power(0, -1)` (base cero con exponente negativo)
+- **THEN** el motor SHALL retornar `null` en TypeScript y `None` en Python de forma segura
 
 ### Requirement: Evaluación de Expresiones Aritméticas
 El sistema SHALL interpretar y evaluar expresiones matemáticas en formato string respetando la precedencia de operadores: potencia (`^`) primero, luego multiplicación, división y módulo (`*`, `/`, `%`), y finalmente suma y resta (`+`, `-`).
@@ -36,3 +40,7 @@ El sistema SHALL interpretar y evaluar expresiones matemáticas en formato strin
 #### Scenario: Precedencia de operadores en expresiones
 - **WHEN** se evalúa la expresión `"2 ^ 3 + 10 % 3"`
 - **THEN** el resultado debe ser `9` sin recurrir a funciones inseguras de ejecución
+- **WHEN** se evalúa la expresión `"2 ^ -2"`
+- **THEN** el resultado debe ser `0.25`
+- **WHEN** se evalúa la expresión `"0 ^ -2"`
+- **THEN** el resultado debe ser `null` en TypeScript y `None` en Python

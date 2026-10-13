@@ -41,12 +41,15 @@ export class SafeMathEngine {
     return this.modulo(a, b);
   }
 
-  power(a: MathNumber, b: MathNumber): MathNumber {
+  power(a: MathNumber, b: MathNumber): MathNumber | null {
     this.validateNumber(a, b);
+    if (a === 0 && b < 0) {
+      return null;
+    }
     return Math.pow(a, b);
   }
 
-  pow(a: MathNumber, b: MathNumber): MathNumber {
+  pow(a: MathNumber, b: MathNumber): MathNumber | null {
     return this.power(a, b);
   }
 
@@ -54,6 +57,9 @@ export class SafeMathEngine {
   evaluateSimple(expr: string): MathNumber | null {
     const tokens = this.tokenize(expr);
     const afterPowers = this.reducePowers(tokens);
+    if (afterPowers === null) {
+      return null;
+    }
     const afterMultDiv = this.reduceMultDiv(afterPowers);
     if (afterMultDiv === null) {
       return null;
@@ -79,7 +85,7 @@ export class SafeMathEngine {
     return tokens;
   }
 
-  private reducePowers(tokens: string[]): Array<MathNumber | string> {
+  private reducePowers(tokens: string[]): Array<MathNumber | string> | null {
     const reduced: Array<MathNumber | string> = [];
     let i = 0;
     while (i < tokens.length) {
@@ -90,9 +96,21 @@ export class SafeMathEngine {
         }
         const prev = reduced.pop();
         if (typeof prev !== 'number') throw new Error('Malformed power syntax');
-        const nxt = this.parseNum(tokens[i + 1]);
-        reduced.push(this.power(prev, nxt));
-        i += 2;
+        let nxt: MathNumber;
+        let consumed = 1;
+        if (tokens[i + 1] === '-' && i + 2 < tokens.length) {
+          nxt = -this.parseNum(tokens[i + 2]);
+          consumed = 2;
+        } else if (tokens[i + 1] === '+' && i + 2 < tokens.length) {
+          nxt = this.parseNum(tokens[i + 2]);
+          consumed = 2;
+        } else {
+          nxt = this.parseNum(tokens[i + 1]);
+        }
+        const res = this.power(prev, nxt);
+        if (res === null) return null;
+        reduced.push(res);
+        i += 1 + consumed;
       } else if (['*', '/', '%', '+', '-'].includes(token)) {
         reduced.push(token);
         i += 1;
@@ -115,12 +133,25 @@ export class SafeMathEngine {
         }
         const prev = reduced.pop();
         if (typeof prev !== 'number') throw new Error(`Malformed ${token} syntax`);
-        const nxtToken = tokens[i + 1];
-        const nxt = typeof nxtToken === 'number' ? nxtToken : this.parseNum(nxtToken);
+        let nxt: MathNumber;
+        let consumed = 1;
+        if (tokens[i + 1] === '-' && i + 2 < tokens.length) {
+          const nxtToken = tokens[i + 2];
+          const nxtVal = typeof nxtToken === 'number' ? nxtToken : this.parseNum(nxtToken);
+          nxt = -nxtVal;
+          consumed = 2;
+        } else if (tokens[i + 1] === '+' && i + 2 < tokens.length) {
+          const nxtToken = tokens[i + 2];
+          nxt = typeof nxtToken === 'number' ? nxtToken : this.parseNum(nxtToken);
+          consumed = 2;
+        } else {
+          const nxtToken = tokens[i + 1];
+          nxt = typeof nxtToken === 'number' ? nxtToken : this.parseNum(nxtToken);
+        }
         const res = this.applyOp(token, prev, nxt);
         if (res === null) return null;
         reduced.push(res);
-        i += 2;
+        i += 1 + consumed;
       } else {
         reduced.push(token);
         i += 1;

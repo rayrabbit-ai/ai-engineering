@@ -26,6 +26,8 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
 2. **Zero production code without a verified failing test (`test(red)`) in the terminal**.
 3. **Zero Pull Requests accepted if they violate the 15 Invariants or TDD causality**.
 
+> 🔬 **Empirical Evidence**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) proving how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    DETERMINISTIC AI ENGINEERING PIPELINE                    │
@@ -153,7 +155,7 @@ npm run test:py:coverage     # Python
 ---
 
 ## 6. Additional Documentation
-* [A/B Testing & Coverage Guide](./docs/ab-testing-and-coverage.md)
+* [Empirical A/B Benchmark Case Study & Coverage Guide](./docs/ab-testing-and-coverage.md)
 * [Operational Manual and Prompt Sequences (P0 - P11)](./OPERATIONAL_MANUAL.md)
 * [The 15 Universal Invariants](.agent/rules/INVARIANTS.md)
 * [Pre-Code SDD Gate](.agent/rules/SDD_GATE.md)

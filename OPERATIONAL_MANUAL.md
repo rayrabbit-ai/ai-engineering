@@ -7,7 +7,79 @@
 
 ---
 
-## 1. Routing & Triage Matrix (R1 – R5)
+## 1. The Two Operational Modes of AI Engineering
+
+The RayRabbit AI Engineering harness rejects the false dichotomy between unconstrained "vibe coding" and tedious manual micromanagement. Instead, it provides two deterministic operational modes governed by the same **15 Engineering Invariants**:
+
+```mermaid
+flowchart TD
+    subgraph ModeSelection["Operational Mode Selection"]
+        Task["New Feature / Change Request"]
+        Decide{"Risk & Scope Uncertainty?"}
+        Task --> Decide
+    end
+
+    subgraph Mode1["Mode 1: Autonomous Invariant-Driven"]
+        Decide -- "Low/Medium Risk (Greenfield, Clear Spec)" --> Auto["Single Directive Prompt"]
+        Auto --> AgentLoop["Agent Self-Orchestrates Gates (P0 -> P8)"]
+        AgentLoop --> GatesAuto["Commit per Gate (red -> green -> refactor)"]
+        GatesAuto --> FinalAudit["npm run verify:gates (Automated CI Audit)"]
+    end
+
+    subgraph Mode2["Mode 2: Supervised HITL (Human-in-the-Loop)"]
+        Decide -- "High Risk (Legacy, Refactor, Security)" --> HITL["P0 Triage Prompt"]
+        HITL --> P1["P1 Characterize"]
+        P1 --> P2["P2 RED Gate -> STOP & Human Review"]
+        P2 --> P3["P3 GREEN Gate -> STOP & Human Review"]
+        P3 --> P4["P4-P7 Refactor/Integration/E2E"]
+        P4 --> P8["P8 Human Confirms Archive & Close"]
+    end
+```
+
+### Mode 1: Autonomous Invariant-Driven Mode
+* **When to use:** Greenfield modules, well-scoped feature requests, bugfixes with clear replication steps, and routine task implementations.
+* **How it works:** The human operator supplies a single high-level directive (e.g., using `/opsx-propose` or an explicit specification prompt). Because the agent's context contains `.agent/rules/INVARIANTS.md`, the LLM internalizes the 15 invariants as non-negotiable cognitive guardrails. The agent autonomously self-orchestrates the entire lifecycle:
+  1. Creates the OpenSpec change artifacts (`proposal.md`, `design.md`, `spec.md`, `tasks.md`).
+  2. Executes Phase 2 (RED) and creates `test(red): <task>`.
+  3. Executes Phase 3 (GREEN) and creates `feat(green): <task>`.
+  4. Runs Phase 4 (REFACTOR), Phase 5 (INTEGRATION), and Phase 6 (HARDENING).
+  5. Validates E2E and runs sync/archive.
+* **Enforcement mechanism:** Trust is replaced by cryptographic audit. At the end of the run, the operator or CI executes `npm run verify:gates` (or `python scripts/verify_gates.py`). If the agent skipped the RED phase, bundled tests and implementation in a single commit, or dropped test coverage below 80%, **the build fails and push is blocked**.
+
+### Mode 2: Supervised Human-in-the-Loop (HITL) Mode
+* **When to use:** Legacy code refactoring, high architectural debt, mission-critical security paths, uncharacterized brownfield codebases, and developer onboarding.
+* **How it works:** The human operator acts as a rigorous co-pilot, driving the agent through the **P0 to P11 Prompt Playbook**. The agent is explicitly commanded to halt after each gate (`STOP and report`).
+  1. The operator issues **P0 (Triage)** and verifies the routing table.
+  2. The operator issues **P1 (Characterize)** if legacy code is touched, verifying the `@legacy-baseline` commit.
+  3. The operator issues **P2 (RED)**, validates the terminal test failure, and reviews the `test(red)` commit.
+  4. The operator confirms the red gate and issues **P3 (GREEN)**, inspecting the implementation diff.
+  5. The operator walks through **P4 (Refactor)** to **P8 (Archive)** step-by-step.
+* **Enforcement mechanism:** Visual human oversight at each gate boundary supplemented by the same final automated CI validator.
+
+---
+
+### Comparative Decision Matrix
+
+| Dimension | Mode 1: Autonomous Invariant-Driven | Mode 2: Supervised Human-in-the-Loop |
+|---|---|---|
+| **Human Effort** | Minimal (1 directive prompt + final review) | Active (step-by-step prompt sequence P0–P11) |
+| **Pace / Velocity** | High (unattended multi-phase execution) | Deliberate & iterative (controlled gates) |
+| **Ideal For** | Greenfield features, isolated SDK tools, known patterns | Brownfield legacy, core protocols, security gates |
+| **Gate Enforcement** | Automated via `verify:gates` & CI `gate-validator.yml` | Real-time human inspection + `verify:gates` CI |
+| **Rollback Trigger** | Automated failure in CI or `verify:gates` rejection | Immediate human intervention upon unexpected diff |
+| **Context Required** | `.agent/rules/` loaded in Active Workspace | `.agent/rules/` loaded + Operator Prompt Playbook |
+
+---
+
+## 2. Hybrid Escalation & Mode Switching
+
+Both modes are 100% interoperable within the same project and change:
+* **Escalate to Supervised (Mode 1 -> Mode 2):** If an autonomous agent encounters ambiguity, violates an invariant, or fails an E2E runtime gate after 3 retries, the operator immediately steps in with prompt **P11 (Failure Recovery)** and transitions the session to Mode 2 (step-by-step P prompts).
+* **Accelerate to Autonomous (Mode 2 -> Mode 1):** Once an operator completes triage (P0) and freezes the legacy baseline (P1), they may issue a single prompt authorizing the agent to run P2 through P6 autonomously under the invariant rules.
+
+---
+
+## 3. Routing & Triage Matrix (R1 – R5)
 
 At the onset of any task or change, prompt **P0 (Triage)** to classify scope without touching code:
 
@@ -21,9 +93,9 @@ At the onset of any task or change, prompt **P0 (Triage)** to classify scope wit
 
 ---
 
-## 2. Operator Prompt Playbook (P0 to P11)
+## 4. Operator Prompt Playbook (P0 to P11)
 
-Copy and paste these exact prompts into your chat session according to the operational phase:
+For **Mode 2 (Supervised HITL)** or targeted phase execution, copy and paste these exact prompts into your chat session:
 
 ### P0 — Triage
 ```text

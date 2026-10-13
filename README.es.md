@@ -26,6 +26,8 @@ Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven D
 2. **Ningún código de producción sin un test en rojo (`test(red)`) previo verificado en terminal**.
 3. **Ningún Pull Request es aceptado si viola las 15 Invariantes o la causalidad TDD**.
 
+> 🔬 **Evidencia Empírica**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde demostramos cómo un agente cae en *"La Ilusión de TDD"* y es bloqueado por el validador de CI.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                       FLUJO DETERMINISTA DE AI ENGINEERING                  │
@@ -153,7 +155,7 @@ npm run test:py:coverage     # Para Python
 ---
 
 ## 6. Documentación Adicional
-* [Guía de Experimento A/B y Cobertura](./docs/ab-testing-and-coverage.es.md)
-* [Manual Operativo y Runbook de Prompts (P0 - P11)](./MANUAL_OPERATIVO.md)
+* [Caso de Estudio Empírico: Benchmark A/B y Cobertura](./docs/ab-testing-and-coverage.es.md)
+* [Manual Operativo y Runbook de Prompts (P0 - P11)](./MANUAL_OPERATIVO.es.md)
 * [Las 15 Invariantes TDD+SDD](.agent/rules/INVARIANTS.md)
 * [Compuerta SDD Pre-Código](.agent/rules/SDD_GATE.md)

@@ -35,7 +35,7 @@
     "test:ts:baseline": "vitest run tests/ts/characterization",
     "test:ts:coverage": "vitest run --coverage",
     "test:py": "pytest",
-    "test:py:coverage": "pytest --cov=src --cov-fail-under=80 --cov-report=term-missing",
+    "test:py:coverage": "pytest --cov=src --cov-branch --cov-fail-under=80 --cov-report=term-missing",
     "verify:gates": "node scripts/verify-gates.mjs",
     "verify:gates:py": "python scripts/verify_gates.py",
     "guard": "node scripts/guard-agent.mjs",

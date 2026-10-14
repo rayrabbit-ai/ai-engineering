@@ -8,6 +8,9 @@ version = "1.0.0"
 description = "Deterministic AI Engineering Template: SDD + Strict TDD"
 readme = "README.md"
 requires-python = ">=3.10"
+authors = [
+    { name = "RayRabbit AI", email = "dev@rayrabbit.site" }
+]
 dependencies = []
 
 [project.optional-dependencies]

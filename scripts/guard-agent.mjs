@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * guard-agent.mjs - Guardian de Contratos y Preservación de Workflows
+ * guard-agent.mjs - Guardián de Contratos y Preservación de Workflows
  * RayRabbit AI Engineering Standard
  * 
  * Previene que la instalación o actualización de OpenSpec ('openspec init', 'openspec update')
  * elimine o degrade las reglas del agente, workflows deterministas o skills TDD.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -26,9 +26,15 @@ const REQUIRED_WORKFLOWS = [
   'opsx-e2e.md',
   'opsx-sync.md',
   'opsx-archive.md',
+  'opsx-audit.md',
 ];
 
-const REQUIRED_RULES = ['INVARIANTS.md', 'SDD_GATE.md', 'AGENTS.md'];
+const REQUIRED_RULES = [
+  'INVARIANTS.md',
+  'SDD_GATE.md',
+  'AGENTS.md',
+  'ADVERSARIAL_AUDITOR.md',
+];
 
 console.log('[GUARD-AGENT] Verificando integridad de contratos y workflows de AI Engineering...');
 
@@ -57,11 +63,6 @@ REQUIRED_WORKFLOWS.forEach((wfFile) => {
   if (!existsSync(target)) {
     console.error(`[GUARD-AGENT] ❌ Workflow determinista faltante: ${wfFile}`);
     errors++;
-  } else {
-    const content = readFileSync(target, 'utf-8');
-    if (!content.includes('author: rayrabbit-ai') && !content.includes('author: openspec')) {
-      console.warn(`[GUARD-AGENT] ⚠️ El workflow ${wfFile} fue modificado o refrescado externamente.`);
-    }
   }
 });
 

@@ -25,6 +25,10 @@ jobs:
         run: |
           node scripts/verify-gates.mjs --self-test
 
+      - name: Verificación de Integridad de Agentes y Auditor Adversarial (Guard)
+        run: |
+          node scripts/guard-agent.mjs
+
       - name: Validar Nomenclatura y Causalidad TDD (Node.js)
         run: |
           node scripts/verify-gates.mjs --base origin/${{ github.base_ref || 'main' }} --head HEAD
@@ -65,7 +69,7 @@ jobs:
       - name: Legacy-Guard (Suite de Caracterización @legacy-baseline)
         run: npm run test:ts:baseline
 
-      - name: Tests Unitarios e Integración con Cobertura Mínima (≥80%)
+      - name: Tests Unitarios e Integración con Cobertura Mínima (Líneas ≥80%, Ramas ≥75%)
         run: npm run test:ts:coverage
 
   test-python:
@@ -73,8 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     if: hashFiles('pyproject.toml') != ''
     steps:
-      - name: Checkout código
+      - name: Checkout repositorio con historial completo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -89,10 +95,14 @@ jobs:
         run: |
           python scripts/verify_gates.py --self-test
 
+      - name: Validar Nomenclatura y Causalidad TDD (Python History Audit)
+        run: |
+          python scripts/verify_gates.py --base origin/${{ github.base_ref || 'main' }} --head HEAD
+
       - name: Legacy-Guard (Suite de Caracterización @legacy_baseline)
         run: |
           pytest -m legacy_baseline --tb=short
 
-      - name: Tests Unitarios e Integración con Cobertura Mínima (≥80%)
+      - name: Tests Unitarios e Integración con Cobertura Mínima (Líneas ≥80%, Ramas ≥75%)
         run: |
-          pytest -m "unit or integration" --cov=src --cov-fail-under=80 --cov-report=term-missing
+          pytest -m "unit or integration" --cov=src --cov-branch --cov-fail-under=80 --cov-report=term-missing

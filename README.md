@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Official RayRabbit AI Template Repository**  
-> *Operational framework and blueprint to build mission-critical software with Autonomous Coding Agents (Google Antigravity, Claude Code, Cursor, Roo Code, and GitHub Copilot).*
+> *Operational framework and blueprint to build mission-critical software with Autonomous Coding Agents (Google Antigravity, Claude Code, Cursor, Roo Code, and more).*
 
 ---
 
@@ -23,9 +23,9 @@ Unconstrained usage of AI coding assistants ("vibe coding") produces:
 ### The Solution: Deterministic AI Engineering
 This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Driven Development (TDD)** and **CI-Enforced Causal Git Commit Gates**:
 1. **Zero code without prior approved specification** (`openspec/specs/`).
-2. **Zero production code without a verified failing test (`test(red)`) in the terminal with scope/module coupling**.
+2. **Zero production code without a verified failing test (`test(red)`) in the terminal with scope/module coupling and strict isolation (production files strictly forbidden in `test(red)`)**.
 3. **Zero Pull Requests accepted if they violate the 15 Invariants, TDD causality, or consolidated spec immutability**.
-4. **Built-in Adversarial Audit**: Pre-push validation via the [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md) subagent and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
+4. **Built-in Adversarial Audit & Guard**: Pre-push and CI enforcement via [`guard-agent`](scripts/guard-agent.mjs), [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md), and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
 > 🔬 **Empirical Evidence**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) proving how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
 
@@ -99,8 +99,8 @@ This template is **100% polyglot and agnostic**:
 
 | Stack | Testing Engine | Coverage Provider | Gate Validator |
 |---|---|---|---|
-| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (≥80%) | `node scripts/verify-gates.mjs` |
-| **Python** | Pytest (`tests/`) | `pytest-cov` (≥80%) | `python scripts/verify_gates.py` |
+| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (Lines ≥80%, Branches ≥75%) | `node scripts/verify-gates.mjs` |
+| **Python** | Pytest (`tests/`) | `pytest-cov` (Lines ≥80%, Branches ≥75%) | `python scripts/verify_gates.py` |
 | **Others (Go, Rust, Java)** | Native with tags | Standard toolchain | `node scripts/verify-gates.mjs` (agnostic) |
 
 ---

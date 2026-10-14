@@ -45,6 +45,18 @@ export const LEGACY_BASELINE_PATTERNS = [
   /baseline\//i,
 ];
 
+export function isProductionFile(filePath) {
+  if (!filePath) return false;
+  const norm = filePath.replace(/\\/g, '/').toLowerCase();
+  // Excluir directorios de pruebas, specs, documentación, scripts y configuración
+  if (norm.startsWith('tests/') || norm.startsWith('test/') || norm.includes('/tests/') || norm.includes('/test/')) return false;
+  if (norm.startsWith('openspec/') || norm.startsWith('docs/') || norm.startsWith('scripts/') || norm.startsWith('.agent/') || norm.startsWith('.github/')) return false;
+  if (norm.endsWith('.md') || norm.endsWith('.json') || norm.endsWith('.yaml') || norm.endsWith('.yml') || norm.endsWith('.toml')) return false;
+  // Todo archivo bajo src/ o lib/ se considera código de producción
+  if (norm.startsWith('src/') || norm.includes('/src/') || norm.startsWith('lib/') || norm.includes('/lib/')) return true;
+  return false;
+}
+
 export function extractModuleName(filePath) {
   if (!filePath) return '';
   const normalized = filePath.replace(/\\/g, '/');
@@ -88,6 +100,14 @@ export function validateCommitList(commits) {
 
     // 2. Registro de Test en Rojo (RED) y sus ámbitos
     if (/^test\(red\)(\([a-z0-9_-]+\))?:/i.test(trimmedSubject)) {
+      // Invariante 1 & 3: Un commit test(red) no puede incluir código de producción
+      const prodFiles = changedFiles.filter(isProductionFile);
+      if (prodFiles.length > 0) {
+        errors.push(
+          `[${shortHash}] Violación de Invariante 1 en '${trimmedSubject}': Un commit 'test(red):' NO puede modificar código de producción (detectado: ${prodFiles.join(', ')}).`
+        );
+      }
+
       const explicitScope = extractScopeFromSubject(trimmedSubject, 'test\\(red\\)');
       if (explicitScope) {
         activeRedScopes.add(explicitScope);
@@ -261,14 +281,30 @@ export function selfTest() {
     throw new Error(`Falló sincronización válida de SDD: ${errsValidSDD.join(', ')}`);
   }
 
+  // Caso 10: Ataque Adversarial: test(red) que modifica código de producción en src/ -> DEBE SER RECHAZADO
+  const invalidRedProd = [
+    { hash: 'advredp', subject: 'test(red): smuggle production code', changedFiles: ['tests/ts/unit/calc.spec.ts', 'src/calc.ts'] }
+  ];
+  const errsRedProd = validateCommitList(invalidRedProd);
+  if (!errsRedProd.some((e) => e.includes('NO puede modificar código de producción'))) {
+    throw new Error('FALLÓ VULNERABILIDAD ADVERSARIAL: verify-gates.mjs permitió código de producción en un commit test(red).');
+  }
+
   console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo prueba adversarial Copilot y SDD) pasaron exitosamente.');
 }
 
-function checkCleanWorkingTree() {
+function checkCleanWorkingTree(allowDirty = false) {
   const status = runGit('git status --porcelain');
   if (status) {
-    console.warn('\n⚠️  ADVERTENCIA DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados:');
-    console.warn(status.split('\n').map((l) => `  ${l}`).join('\n'));
+    if (allowDirty) {
+      console.warn('\n⚠️  ADVERTENCIA DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados (--allow-dirty activo):');
+      console.warn(status.split('\n').map((l) => `  ${l}`).join('\n'));
+    } else {
+      console.error('\n❌ ERROR DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados en el repositorio:');
+      console.error(status.split('\n').map((l) => `  ${l}`).join('\n'));
+      console.error('\nPara continuar, confirme (commit) o descarte (stash/clean) los cambios, o pase el flag --allow-dirty.');
+      process.exit(1);
+    }
   }
 }
 
@@ -279,7 +315,8 @@ function main() {
     process.exit(0);
   }
 
-  checkCleanWorkingTree();
+  const allowDirty = args.includes('--allow-dirty');
+  checkCleanWorkingTree(allowDirty);
 
   const baseIdx = args.indexOf('--base');
   const headIdx = args.indexOf('--head');

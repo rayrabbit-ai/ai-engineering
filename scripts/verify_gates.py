@@ -52,6 +52,22 @@ LEGACY_PATTERNS = [
     r"baseline/",
 ]
 
+def is_production_file(file_path: str) -> bool:
+    if not file_path:
+        return False
+    norm = file_path.replace("\\", "/").lower()
+    # Excluir directorios de pruebas, specs, documentación, scripts y configuración
+    if norm.startswith("tests/") or norm.startswith("test/") or "/tests/" in norm or "/test/" in norm:
+        return False
+    if norm.startswith("openspec/") or norm.startswith("docs/") or norm.startswith("scripts/") or norm.startswith(".agent/") or norm.startswith(".github/"):
+        return False
+    if norm.endswith(".md") or norm.endswith(".json") or norm.endswith(".yaml") or norm.endswith(".yml") or norm.endswith(".toml"):
+        return False
+    # Todo archivo bajo src/ o lib/ se considera código de producción
+    if norm.startswith("src/") or "/src/" in norm or norm.startswith("lib/") or "/lib/" in norm:
+        return True
+    return False
+
 def extract_module_name(file_path: str) -> str:
     if not file_path:
         return ""
@@ -95,6 +111,14 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
 
         # 2. Registrar presencia de RED y sus ámbitos
         if re.match(r"^test\(red\)(\([a-z0-9_-]+\))?:", subject_stripped, re.IGNORECASE):
+            # Invariante 1 & 3: Un commit test(red) no puede incluir código de producción
+            prod_files = [f for f in changed_files if is_production_file(f)]
+            if prod_files:
+                errors.append(
+                    f"[{short_hash}] Violación de Invariante 1 en '{subject_stripped}': "
+                    f"Un commit 'test(red):' NO puede modificar código de producción (detectado: {', '.join(prod_files)})."
+                )
+
             explicit_scope = extract_scope_from_subject(subject_stripped, r"test\(red\)")
             if explicit_scope:
                 active_red_scopes.add(explicit_scope)
@@ -235,27 +259,42 @@ def self_test() -> int:
     errs_vsdd = validate_commit_list(valid_sdd)
     assert len(errs_vsdd) == 0, f"Error en sync válida de SDD: {errs_vsdd}"
 
+    # Caso 9: Ataque Adversarial: test(red) que modifica código de producción en src/ -> DEBE FALLAR
+    invalid_red_prod = [
+        ("credprod", "test(red): smuggle production code", ["tests/unit/test_calc.py", "src/calc.py"])
+    ]
+    errs_rp = validate_commit_list(invalid_red_prod)
+    assert any("NO puede modificar código de producción" in e for e in errs_rp), "Falló bloqueo de código de producción en test(red)"
+
     print("[SELF-TEST] ✅ Todas las aserciones internas y pruebas adversariales pasaron con éxito.\n")
     return 0
 
-def check_clean_working_tree():
+def check_clean_working_tree(allow_dirty: bool = False):
     status = run_git("git status --porcelain")
     if status:
-        print("\n⚠️  ADVERTENCIA DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados:")
-        for line in status.splitlines():
-            print(f"  {line}")
+        if allow_dirty:
+            print("\n⚠️  ADVERTENCIA DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados (--allow-dirty activo):")
+            for line in status.splitlines():
+                print(f"  {line}")
+        else:
+            print("\n❌ ERROR DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados en el repositorio:")
+            for line in status.splitlines():
+                print(f"  {line}")
+            print("\nPara continuar, confirme (commit) o descarte (stash/clean) los cambios, o pase el flag --allow-dirty.")
+            sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(description="Validador de Commits por Compuerta (RayRabbit AI Engineering)")
     parser.add_argument("--base", default="origin/main", help="Rama o commit base para comparar")
     parser.add_argument("--head", default="HEAD", help="Commit head a validar")
     parser.add_argument("--self-test", action="store_true", help="Ejecutar autoverificación de reglas")
+    parser.add_argument("--allow-dirty", action="store_true", help="Permitir árbol de trabajo sucio")
     args = parser.parse_args()
 
     if args.self_test:
         return self_test()
 
-    check_clean_working_tree()
+    check_clean_working_tree(args.allow_dirty)
 
     rev_range = f"{args.base}..{args.head}"
     raw_commits = run_git(f"git log --reverse --format='%H|%s' {rev_range}")

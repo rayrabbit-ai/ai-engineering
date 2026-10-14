@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Repositorio Template Oficial de RayRabbit AI**  
-> *Framework operativo y repositorio base para construir software de misión crítica con Agentes Autónomos de Codificación (Google Antigravity, Claude Code, Cursor, Roo Code y GitHub Copilot).*
+> *Framework operativo y repositorio base para construir software de misión crítica con Agentes Autónomos de Codificación (Google Antigravity, Claude Code, Cursor, Roo Code y más).*
 
 ---
 
@@ -23,9 +23,9 @@ El uso descontrolado de asistentes de IA para generar software ("vibe coding") p
 ### La Solución: AI Engineering Determinista
 Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven Development (TDD) Estricto** y **Compuertas Causales Deterministas en Git CI/CD**:
 1. **Ningún código sin especificación previa** (`openspec/specs/`).
-2. **Ningún código de producción sin un test en rojo (`test(red)`) previo verificado en terminal con acoplamiento de ámbito/módulo**.
+2. **Ningún código de producción sin un test en rojo (`test(red)`) previo verificado en terminal con acoplamiento de ámbito/módulo y aislamiento estricto (código de producción estrictamente prohibido en `test(red)`)**.
 3. **Ningún Pull Request es aceptado si viola las 15 Invariantes, la causalidad TDD o la inmutabilidad de especificaciones consolidadas**.
-4. **Auditoría Adversarial Integrada**: Validación pre-push mediante el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
+4. **Auditoría Adversarial y Guard Integrados**: Validación pre-push y en CI mediante [`guard-agent`](scripts/guard-agent.mjs), el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
 > 🔬 **Evidencia Empírica**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde demostramos cómo un agente cae en *"La Ilusión de TDD"* y es bloqueado por el validador de CI.
 
@@ -99,8 +99,8 @@ Este template es **100% políglota y agnóstico**:
 
 | Stack | Framework de Pruebas | Cobertura | Validador de Compuertas |
 |---|---|---|---|
-| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (≥80%) | `node scripts/verify-gates.mjs` |
-| **Python** | Pytest (`tests/`) | `pytest-cov` (≥80%) | `python scripts/verify_gates.py` |
+| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (Líneas ≥80%, Ramas ≥75%) | `node scripts/verify-gates.mjs` |
+| **Python** | Pytest (`tests/`) | `pytest-cov` (Líneas ≥80%, Ramas ≥75%) | `python scripts/verify_gates.py` |
 | **Otros (Go, Rust, Java)** | Nativo con tags | Herramienta estándar | `node scripts/verify-gates.mjs` (agnóstico) |
 
 ---

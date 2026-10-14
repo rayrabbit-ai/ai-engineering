@@ -4,6 +4,8 @@
 
 Estas 15 invariantes constituyen las reglas no negociables de desarrollo determinista para cualquier asistente de codificación (Google Antigravity, Claude Code, Cursor, Roo Code, GitHub Copilot).
 
+> **Arquitectura de Enforcement:** Las invariantes 1, 2, 3, 4, 6, 12, 14 y 15 son auditadas mecánicamente por CI (`verify-gates.mjs`, `verify_gates.py`, `check_python_coverage.py` y suites de prueba de GitHub Actions). Las invariantes 5, 7, 8, 9, 10, 11 y 13 rigen los protocolos de razonamiento del agente, adaptadores de prompt y flujos de trabajo locales previos al commit.
+
 1. **Commit por Compuerta & Acoplamiento de Ámbito**: Commits atómicos e independientes para `RED`, `GREEN`, `REFACTOR`, `BASELINE`, `ROUTING`, `FIX`. Todo `feat(green)` o `fix` debe estar acoplado por ámbito (scope coupling) al módulo exacto del `test(red)` precedente. Cualquier rollback equivale al `git revert` de ese commit exacto.
 2. **Baseline Inmutable**: Los tests marcados con `@legacy-baseline` son inmutables. Solo se modifican con un commit explícito `test(baseline): update <x> por decisión <y>`.
 3. **Todo Bug entra por RED**: Test de regresión primero con fallo legítimo verificado en terminal antes de tocar código de producción, consumiendo el ámbito del bug tras el fix.

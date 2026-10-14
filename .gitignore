@@ -31,6 +31,7 @@ wheels/
 # Testing & Cobertura
 .coverage
 .coverage.*
+.coverage*.json
 htmlcov/
 .pytest_cache/
 coverage/

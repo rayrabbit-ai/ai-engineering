@@ -4,6 +4,8 @@
 
 These 15 invariants constitute the non-negotiable rules of deterministic software engineering for any AI coding assistant (Google Antigravity, Claude Code, Cursor, Roo Code, GitHub Copilot).
 
+> **Enforcement Architecture:** Invariants 1, 2, 3, 4, 6, 12, 14, and 15 are mechanically verified by CI (`verify-gates.mjs`, `verify_gates.py`, `check_python_coverage.py`, and GitHub Actions test suites). Invariants 5, 7, 8, 9, 10, 11, and 13 govern agent reasoning protocols, prompt adapters, and local pre-commit workflows.
+
 1. **Commit per Gate & Scope Coupling**: Atomic independent commits for `RED`, `GREEN`, `REFACTOR`, `BASELINE`, `ROUTING`, `FIX`. Every `feat(green)` or `fix` commit must be scope-coupled to the exact module of the preceding `test(red)`. Any rollback equals a clean `git revert` of that exact commit.
 2. **Immutable Baseline**: Tests tagged `@legacy-baseline` are immutable. They can only be modified via an explicit commit `test(baseline): update <x> due to <y>`.
 3. **All Bugs Enter via RED**: Regression test first with legitimate failure demonstrated in the terminal before touching production code, consuming the bug scope upon green fix.

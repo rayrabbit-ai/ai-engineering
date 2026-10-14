@@ -24,29 +24,39 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Verificador de Umbrales de Cobertura Separados (Líneas y Ramas)")
+    parser.add_argument("report", nargs="?", default=None, type=Path, help="Informe JSON generado por coverage.py (opcional)")
     parser.add_argument("--min-lines", type=float, default=80.0, help="Porcentaje mínimo requerido para líneas (default: 80.0)")
     parser.add_argument("--min-branches", type=float, default=75.0, help="Porcentaje mínimo requerido para ramas (default: 75.0)")
     args = parser.parse_args()
 
-    # Generar o leer informe JSON desde .coverage
-    try:
-        res = subprocess.run(
-            ["python", "-m", "coverage", "json", "-o", "-"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        cov_data = json.loads(res.stdout)
-    except Exception as err:
-        print(f"❌ ERROR AL OBTENER DATOS DE COBERTURA: {err}")
-        print("Asegúrese de haber ejecutado pytest con '--cov=src --cov-branch' previamente.")
-        return 1
+    cov_data = None
+    if args.report and Path(args.report).is_file():
+        try:
+            cov_data = json.loads(Path(args.report).read_text(encoding="utf-8"))
+        except Exception as error:
+            print(f"❌ Error al leer el informe de cobertura '{args.report}': {error}")
+            return 1
+    else:
+        try:
+            res = subprocess.run(
+                [sys.executable, "-m", "coverage", "json", "-o", "-"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            cov_data = json.loads(res.stdout)
+        except Exception as err:
+            print(f"❌ ERROR AL OBTENER DATOS DE COBERTURA: {err}")
+            print("Asegúrese de haber ejecutado pytest con '--cov=src --cov-branch' previamente.")
+            return 1
 
     totals = cov_data.get("totals", {})
-    line_cov = totals.get("percent_statements_covered", totals.get("percent_covered", 0.0))
-    branch_cov = totals.get("percent_branches_covered", 0.0)
+    statements = totals.get("num_statements", 0)
+    branches = totals.get("num_branches", 0)
+    line_cov = totals.get("percent_statements_covered", totals.get("percent_covered", 100.0 if statements == 0 else 0.0))
+    branch_cov = totals.get("percent_branches_covered", 100.0 if branches == 0 else 0.0)
 
     print("\n" + "=" * 60)
     print("AUDITORÍA MECÁNICA DE COBERTURA PYTHON (F-09)")

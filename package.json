@@ -22,6 +22,9 @@
     "type": "git",
     "url": "https://github.com/rayrabbit-ai/ai-engineering.git"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -35,9 +38,11 @@
     "test:ts:baseline": "vitest run tests/ts/characterization",
     "test:ts:coverage": "vitest run --coverage",
     "test:py": "pytest",
-    "test:py:coverage": "pytest --cov=src --cov-branch --cov-report=term-missing && python scripts/check_python_coverage.py",
+    "test:py:coverage": "pytest -m \"unit or integration\" --cov=src --cov-branch --cov-report=term-missing --cov-report=json:.coverage-python.json && python scripts/check_python_coverage.py .coverage-python.json --min-lines 80 --min-branches 75",
     "verify:gates": "node scripts/verify-gates.mjs",
+    "verify:gates:self-test": "node scripts/verify-gates.mjs --self-test",
     "verify:gates:py": "python scripts/verify_gates.py",
+    "verify:gates:py:self-test": "python scripts/verify_gates.py --self-test",
     "verify:red": "node scripts/verify-red-failure.mjs",
     "verify:red:py": "python scripts/verify_red_failure.py",
     "check:coverage:py": "python scripts/check_python_coverage.py",
@@ -46,14 +51,10 @@
     "setup:branch-protection": "python scripts/setup_branch_protection.py"
   },
   "devDependencies": {
-    "@fission-ai/openspec": "^1.14.1",
-    "@types/node": "^22.20.5",
-    "@vitest/coverage-v8": "^3.2.7",
+    "@fission-ai/openspec": "0.17.2",
+    "@types/node": "24.19.2",
+    "@vitest/coverage-v8": "5.0.4",
     "typescript": "^5.3.3",
-    "vitest": "^3.2.7"
-  },
-  "overrides": {
-    "tinypool": ">=2.1.2",
-    "braces": "^3.0.3"
+    "vitest": "5.0.4"
   }
 }

@@ -429,7 +429,7 @@ def main():
     if not is_valid_ref_format(head):
         print(f"❌ ERROR DE SEGURIDAD GIT: La referencia HEAD '{head}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).")
         return 1
-    head_sha = run_git_safe(["rev-parse", "--verify", head])
+    head_sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", head])
     if not head_sha:
         print(f"❌ ERROR DE RESOLUCIÓN GIT: No se pudo resolver la referencia HEAD '{head}'. Verifique que esté dentro de un repositorio Git con commits.")
         return 1
@@ -440,7 +440,7 @@ def main():
         if not is_valid_ref_format(base):
             print(f"❌ ERROR DE SEGURIDAD GIT: La referencia base '{base}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).")
             return 1
-        base_sha = run_git_safe(["rev-parse", "--verify", base])
+        base_sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", base])
         if not base_sha:
             print(f"❌ ERROR DE COMPUERTA: La referencia base especificada '{base}' no existe en el repositorio.")
             print("Si está ejecutando en local sin remotos configurados, ejecute 'python scripts/verify_gates.py --base <commit-o-rama>' o agregue el remote correspondiente.")
@@ -449,13 +449,13 @@ def main():
         # Si no se pasó --base, buscar candidatos válidos
         candidates = ["origin/main", "origin/master", "main", "master"]
         for cand in candidates:
-            sha = run_git_safe(["rev-parse", "--verify", cand])
+            sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", cand])
             if sha and sha != head_sha:
                 base = cand
                 break
 
         if not base:
-            prev_sha = run_git_safe(["rev-parse", "--verify", "HEAD~1"])
+            prev_sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", "HEAD~1"])
             if prev_sha:
                 base = "HEAD~1"
                 print(f"[GATE-INFO] No se detectó remote origin/main. Usando fallback local seguro: base = HEAD~1")
@@ -479,7 +479,11 @@ def main():
                 print("\n✅ COMMIT INICIAL VALIDADO EXITOSAMENTE (Python).")
                 return 0
 
-    rev_range = f"{base}..{head}"
+    base_sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", base])
+    if not base_sha:
+        print(f"❌ ERROR DE COMPUERTA: No se pudo resolver la referencia base '{base}'.")
+        return 1
+    rev_range = f"{base_sha}..{head_sha}"
     try:
         raw_commits = run_git_or_throw(["log", "--reverse", "--format=%H|%s", rev_range], f"Fallo al obtener commits en el rango '{rev_range}'")
     except RuntimeError as err:

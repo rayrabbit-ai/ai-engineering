@@ -458,7 +458,7 @@ function main() {
     console.error(`❌ ERROR DE SEGURIDAD GIT: La referencia HEAD '${head}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).`);
     process.exit(1);
   }
-  const headSha = runGitSafe(['rev-parse', '--verify', head]);
+  const headSha = runGitSafe(['rev-parse', '--verify', '--end-of-options', head]);
   if (!headSha) {
     console.error(`❌ ERROR DE RESOLUCIÓN GIT: No se pudo resolver la referencia HEAD '${head}'. Verifique que esté dentro de un repositorio Git con commits.`);
     process.exit(1);
@@ -471,7 +471,7 @@ function main() {
       console.error(`❌ ERROR DE SEGURIDAD GIT: La referencia base '${base}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).`);
       process.exit(1);
     }
-    const baseSha = runGitSafe(['rev-parse', '--verify', base]);
+    const baseSha = runGitSafe(['rev-parse', '--verify', '--end-of-options', base]);
     if (!baseSha) {
       console.error(`❌ ERROR DE COMPUERTA: La referencia base especificada '${base}' no existe en el repositorio.`);
       console.error(`Si está ejecutando en local sin remotos configurados, ejecute 'node scripts/verify-gates.mjs --base <commit-o-rama>' o agregue el remote correspondiente.`);
@@ -481,7 +481,7 @@ function main() {
     // Si no se pasó --base, buscar candidatos válidos
     const candidates = ['origin/main', 'origin/master', 'main', 'master'];
     for (const cand of candidates) {
-      const sha = runGitSafe(['rev-parse', '--verify', cand]);
+      const sha = runGitSafe(['rev-parse', '--verify', '--end-of-options', cand]);
       if (sha && sha !== headSha) {
         base = cand;
         break;
@@ -489,7 +489,7 @@ function main() {
     }
 
     if (!base) {
-      const prevSha = runGitSafe(['rev-parse', '--verify', 'HEAD~1']);
+      const prevSha = runGitSafe(['rev-parse', '--verify', '--end-of-options', 'HEAD~1']);
       if (prevSha) {
         base = 'HEAD~1';
         console.log(`[GATE-INFO] No se detectó remote origin/main. Usando fallback local seguro: base = HEAD~1`);
@@ -517,7 +517,12 @@ function main() {
     }
   }
 
-  const revRange = `${base}..${head}`;
+  const baseSha = runGitSafe(['rev-parse', '--verify', '--end-of-options', base]);
+  if (!baseSha) {
+    console.error(`❌ ERROR DE COMPUERTA: No se pudo resolver la referencia base '${base}'.`);
+    process.exit(1);
+  }
+  const revRange = `${baseSha}..${headSha}`;
   let rawCommits;
   try {
     rawCommits = runGitOrThrow(['log', '--reverse', '--format=%H|%s', revRange], `Fallo al obtener commits en el rango '${revRange}'`);

@@ -43,7 +43,7 @@ Abre tu asistente de codificación preferido (Google Antigravity, Cursor, Claude
    Escribe una nueva spec en `openspec/specs/<mi-capacidad>/spec.md` con escenarios Given/When/Then.
    Valida con:
    ```bash
-   npx @fission-ai/openspec validate
+   npx @fission-ai/openspec validate --all
    ```
 
 2. **Ejecutar Triage**:
@@ -58,13 +58,20 @@ Abre tu asistente de codificación preferido (Google Antigravity, Cursor, Claude
    ```text
    /opsx-apply mi-cambio
    ```
-   El agente ejecutará las compuertas RED -> GREEN -> REFACTOR -> INTEGRATION -> HARDENING, realizando un commit atómico en cada fase.
+   El agente ejecutará las compuertas RED -> GREEN -> REFACTOR -> INTEGRATION -> HARDENING, realizando un commit atómico en cada fase con acoplamiento estricto de ámbito.
 
 4. **Validar antes de Enviar PR**:
-   Antes de hacer push, corre:
+   Antes de hacer push, ejecuta la auditoría determinista de compuertas:
    ```bash
+   # Validador Node.js
    npm run verify:gates
+
+   # Validador Python
+   npm run verify:gates:py
+
+   # O el workflow adversarial completo
+   /opsx-audit
    ```
-   El validador confirmará que tus commits cumplen con la causalidad TDD y que el baseline está intacto.
+   El validador confirmará que tus commits cumplen con la causalidad TDD por ámbito, que el baseline está intacto y que las especificaciones no fueron alteradas directamente.
 
 ¡Listo! Cuando abras un Pull Request en GitHub, el flujo `.github/workflows/gate-validator.yml` auditará el PR automáticamente.

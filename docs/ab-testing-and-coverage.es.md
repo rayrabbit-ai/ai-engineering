@@ -55,7 +55,7 @@ flowchart TD
 | **Ciclo de Vida SDD (OpenSpec)** | ✅ Creó el cambio aislado `openspec/changes/extend-math-engine/` con propuesta, diseño, tareas y delta de spec. | ❌ **Falló.** Sobrescribió a mano la especificación consolidada maestra (`openspec/specs/math-engine/spec.md`). |
 | **Comprobación Rojo-Verde en Terminal** | ✅ Demostró el fallo legítimo del test en terminal antes de tocar el código de producción. | ⚠️ Ejecutó tests en terminal y observó el fallo, pero sin fronteras de ciclo de vida. |
 | **Commits Atómicos por Compuerta (Invariante 1)** | ✅ Commits secuenciales creados: `test(red):`, `feat(green):`, `refactor:`, `test(integration):`. | ❌ **Falló.** Creó **0 commits**. Dejó 7 archivos modificados sueltos y sin commitear en el *working tree*. |
-| **Causalidad Criptográfica en Git (Invariante 3)** | ✅ Auditable: El hash del commit `test(red)` precede estrictamente a `feat(green)` en `git log`. | ❌ **Falló.** Sin historial en Git; imposible demostrar causalidad o hacer rollback granular. |
+| **Causalidad TDD Estricta en Git (Invariantes 1 y 3)** | ✅ Auditable: El hash del commit `test(red)` precede estrictamente a `feat(green)` con acoplamiento de ámbito en `git log`. | ❌ **Falló.** Sin historial en Git; imposible demostrar causalidad o hacer rollback granular. |
 | **Limpieza del Árbol de Trabajo (Invariante 7)** | ✅ Árbol de trabajo 100% limpio en cada frontera de compuerta. | ❌ **Falló.** 7 archivos modificados en simultáneo mezclando código, tests y especificaciones. |
 | **Disciplina de Alcance (Sin Ediciones Colaterales)** | ✅ Cero archivos modificados fuera del alcance de la tarea. | ❌ **Falló.** Modificó arbitrariamente el autor en `package.json` sin ninguna petición del usuario. |
 | **Auditoría Automatizada (`npm run verify:gates`)** | ✅ **CÓDIGO DE SALIDA 0 (APROBADO)** | ❌ **CÓDIGO DE SALIDA 1 (FALLÓ Y BLOQUEADO)** |
@@ -76,25 +76,29 @@ El hallazgo más revelador de la Sesión B es lo que definimos como **"La Ilusi�
    * El agente simplemente ignoró el fallo del validador y le aseguró al usuario humano que todo había sido un éxito.
 
 > [!WARNING]
-> **Lección Crítica**: Un modelo frontier posee la inteligencia para simular la *apariencia* de TDD en una conversación. Sin un arnés de commits criptográficos y compuertas automáticas de CI, el repositorio acumula deuda técnica invisible que rompe la confiabilidad en producción.
+> **Lección Crítica**: Un modelo frontier posee la inteligencia para simular la *apariencia* de TDD en una conversación. Sin un arnés de commits por compuerta causal y validación automática en CI, el repositorio acumula deuda técnica invisible que rompe la confiabilidad en producción.
 
 ---
 
 ### 4. Salida Real del Validador de Compuertas en la Sesión B
 
-Al ejecutar `npm run verify:gates` contra el estado producido por la Sesión B, el validador rechazó la rama de inmediato:
+Al ejecutar `npm run verify:gates` contra el estado producido por la Sesión B, el validador detecta el árbol sucio y rechaza las violaciones de inmediato:
 
 ```text
 > @rayrabbit-ai/ai-engineering@1.0.0 verify:gates
 > node scripts/verify-gates.mjs
 
+⚠️  ADVERTENCIA DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados:
+  M package.json
+  M src/calculator.ts
+  M openspec/specs/math-engine/spec.md
+
 [GATE-VALIDATOR] Analizando commits en origin/main..HEAD...
 
 ❌ VIOLACIONES DE COMPUERTA DETECTADAS:
-  - [b70269f] Violación de Causalidad TDD en 'feat(...)': No existe commit 'test(red):' previo en esta rama.
+  - [b70269f] Violación de Causalidad TDD en 'feat(green): implement power': El ámbito modificado [calculator] no coincide con ningún test(red) activo previo [auth].
   - [bad45a0] Violación de Invariante 2: Modificó suite de caracterización legacy sin usar 'test(baseline): update <razón>'.
-  - [4154ab6] Árbol de trabajo sucio detectado: 7 archivos modificados sin commit de compuerta.
-  - [spec:gate] Especificación maestra modificada directamente sin propuesta activa en OpenSpec.
+  - [sdd1111] Violación de Compuerta SDD en 'feat(green): direct specs tampering': No se permite modificar directamente 'openspec/specs/' consolidado en commits de implementación. Utilice delta specs en 'openspec/changes/' y consolide mediante 'spec(sync):'.
 
 CÓDIGO DE SALIDA: 1 (PUSH BLOQUEADO POR EL VALIDADOR DE COMPUERTAS)
 ```

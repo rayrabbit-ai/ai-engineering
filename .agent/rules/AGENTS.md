@@ -12,15 +12,16 @@ In this repository, the AI agent does not act as an unconstrained code generator
 - **Zero Hallucination Policy**: Every behavior is validated through formal assertions and verifiable contracts.
 - **No Production Mocks**: 100% functional production code. Test doubles (mocks/stubs/fixtures) are strictly confined to isolated unit tests.
 - **Environment Agnosticism**: In Python, always use `pathlib.Path` and `importlib.resources`. Never use `os.path` or tamper with `sys.path`.
-- **Unwavering TDD Discipline**: Every new or modified code path MUST have an antecedent `RED` commit displaying legitimate terminal failure before the `GREEN` commit.
+- **Unwavering TDD Discipline**: Every new or modified code path MUST have an antecedent `RED` commit displaying legitimate terminal failure before the `GREEN` commit, strictly scope-coupled.
 
 ---
 
-## 2. Core Repository Invariants
+## 2. Core Repository Invariants & Rules
 
 Mandatory references:
 - [INVARIANTS.md](./INVARIANTS.md): The 15 Universal TDD+SDD Invariants.
-- [SDD_GATE.md](./SDD_GATE.md): Pre-code contract evaluation gate.
+- [SDD_GATE.md](./SDD_GATE.md): Pre-code contract evaluation gate & consolidated spec immutability.
+- [ADVERSARIAL_AUDITOR.md](./ADVERSARIAL_AUDITOR.md): Pre-push adversarial audit protocol and zero-trust verification.
 
 ---
 

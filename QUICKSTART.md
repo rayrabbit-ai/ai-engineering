@@ -43,7 +43,7 @@ Open your preferred AI coding assistant (Google Antigravity, Cursor, Claude Code
    Add or edit a spec in `openspec/specs/<capability>/spec.md` with Given/When/Then scenarios.
    Validate with:
    ```bash
-   npx @fission-ai/openspec validate
+   npx @fission-ai/openspec validate --all
    ```
 
 2. **Execute Triage**:
@@ -58,13 +58,20 @@ Open your preferred AI coding assistant (Google Antigravity, Cursor, Claude Code
    ```text
    /opsx-apply my-change
    ```
-   The agent implements tasks through strict gates: RED -> GREEN -> REFACTOR -> INTEGRATION -> HARDENING, performing atomic commits per phase.
+   The agent implements tasks through strict gates: RED -> GREEN -> REFACTOR -> INTEGRATION -> HARDENING, performing atomic commits per phase with strict scope-coupling.
 
 4. **Verify Gates Before Pushing**:
-   Before opening a PR, run:
+   Before opening a PR, run the deterministic gate audit:
    ```bash
+   # Node.js validator
    npm run verify:gates
+
+   # Python validator
+   npm run verify:gates:py
+
+   # Or the full pre-push adversarial audit
+   /opsx-audit
    ```
-   The gate auditor ensures your commits obey TDD causality and baseline invariants.
+   The gate auditor ensures your commits obey scope-coupled TDD causality, that legacy baselines remain intact, and that master specifications are not tampered with directly.
 
 You are done! When opening a Pull Request on GitHub, `.github/workflows/gate-validator.yml` automatically enforces these gates.

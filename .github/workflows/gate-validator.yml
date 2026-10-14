@@ -21,6 +21,10 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Autochequeo de Reglas Adversariales y Causalidad (Self-Test)
+        run: |
+          node scripts/verify-gates.mjs --self-test
+
       - name: Validar Nomenclatura y Causalidad TDD (Node.js)
         run: |
           node scripts/verify-gates.mjs --base origin/${{ github.base_ref || 'main' }} --head HEAD
@@ -39,7 +43,7 @@ jobs:
 
       - name: Validar Coherencia de Especificaciones
         run: |
-          npx --yes @fission-ai/openspec validate
+          npx --yes @fission-ai/openspec validate --all
 
   test-typescript:
     name: "Suite TypeScript / Node.js & Cobertura"
@@ -80,6 +84,10 @@ jobs:
       - name: Instalar dependencias
         run: |
           pip install -e .[test]
+
+      - name: Autochequeo de Compuertas Adversariales (Python Self-Test)
+        run: |
+          python scripts/verify_gates.py --self-test
 
       - name: Legacy-Guard (Suite de Caracterización @legacy_baseline)
         run: |

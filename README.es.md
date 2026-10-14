@@ -21,10 +21,11 @@ El uso descontrolado de asistentes de IA para generar software ("vibe coding") p
 * **Rotura de Código Legacy**: Modificar código existente sin una red de seguridad inmutable rompe funcionalidades históricas.
 
 ### La Solución: AI Engineering Determinista
-Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven Development (TDD) Estricto** y **Compuertas Criptográficas en CI/CD**:
+Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven Development (TDD) Estricto** y **Compuertas Causales Deterministas en Git CI/CD**:
 1. **Ningún código sin especificación previa** (`openspec/specs/`).
-2. **Ningún código de producción sin un test en rojo (`test(red)`) previo verificado en terminal**.
-3. **Ningún Pull Request es aceptado si viola las 15 Invariantes o la causalidad TDD**.
+2. **Ningún código de producción sin un test en rojo (`test(red)`) previo verificado en terminal con acoplamiento de ámbito/módulo**.
+3. **Ningún Pull Request es aceptado si viola las 15 Invariantes, la causalidad TDD o la inmutabilidad de especificaciones consolidadas**.
+4. **Auditoría Adversarial Integrada**: Validación pre-push mediante el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
 > 🔬 **Evidencia Empírica**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde demostramos cómo un agente cae en *"La Ilusión de TDD"* y es bloqueado por el validador de CI.
 

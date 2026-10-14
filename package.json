@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsc",
     "spec:list": "openspec list",
-    "spec:validate": "openspec validate",
+    "spec:validate": "openspec validate --all",
     "spec:view": "openspec view",
     "test:ts": "vitest run",
     "test:ts:unit": "vitest run tests/ts/unit",

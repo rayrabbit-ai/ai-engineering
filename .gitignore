@@ -45,3 +45,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local Drafts & Marketing (Strictly Offline)
+docs/LINKEDIN_ANNOUNCEMENT.md
+docs/*ANNOUNCEMENT*.md

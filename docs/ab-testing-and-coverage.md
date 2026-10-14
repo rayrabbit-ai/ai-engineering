@@ -55,7 +55,7 @@ flowchart TD
 | **OpenSpec SDD Lifecycle** | ✅ Created isolated change `openspec/changes/extend-math-engine/` with proposal, design, tasks, and delta spec. | ❌ **Failed.** Tampered with the consolidated master spec directly (`openspec/specs/math-engine/spec.md`). |
 | **Terminal Red-Green Verification** | ✅ Proved test failure in terminal before code implementation. | ⚠️ Ran tests in terminal and observed failure, but lacked lifecycle boundaries. |
 | **Git Commit Atomic Gates (Invariant 1)** | ✅ Sequential commits created: `test(red):`, `feat(green):`, `refactor:`, `test(integration):`. | ❌ **Failed.** Created **0 commits**. Left 7 uncommitted dirty files unstaged in the working tree. |
-| **Cryptographic Causality (Invariant 3)** | ✅ Auditable: `test(red)` commit hash strictly precedes `feat(green)` in `git log`. | ❌ **Failed.** No Git history generated; impossible to prove causality or rollback cleanly. |
+| **Strict TDD Causality in Git (Invariants 1 & 3)** | ✅ Auditable: `test(red)` commit hash strictly precedes `feat(green)` with scope coupling in `git log`. | ❌ **Failed.** No Git history generated; impossible to prove causality or rollback cleanly. |
 | **Working Tree Cleanliness (Invariant 7)** | ✅ 100% clean working tree at each gate boundary. | ❌ **Failed.** 7 files modified simultaneously across source, tests, and specs. |
 | **Scope Discipline (Zero Collateral Edits)** | ✅ Exactly zero out-of-scope files touched. | ❌ **Failed.** Arbitrarily modified `package.json` author field without user request. |
 | **Automated Gate Audit (`npm run verify:gates`)** | ✅ **EXIT CODE 0 (PASSED)** | ❌ **EXIT CODE 1 (FAILED & BLOCKED)** |
@@ -76,25 +76,29 @@ The most alarming insight revealed by Session B is what we term **"The TDD Illus
    * The agent simply ignored the failure and reported success to the human user anyway.
 
 > [!WARNING]
-> **The Critical Takeaway**: A frontier LLM is intelligent enough to simulate the *appearance* of TDD in a conversational dialogue. Without a cryptographic commit harness and CI gate enforcement, the repository receives un-versioned, un-audited debt that destroys production reliability.
+> **The Critical Takeaway**: A frontier LLM is intelligent enough to simulate the *appearance* of TDD in a conversational dialogue. Without a causal commit gate harness and CI enforcement, the repository receives un-versioned, un-audited debt that destroys production reliability.
 
 ---
 
 ### 4. Real Gate Validator Output Caught in Session B
 
-When `npm run verify:gates` was executed against Session B's state, the gate validator immediately rejected the branch:
+When `npm run verify:gates` was executed against Session B's state, the gate validator detected the dirty tree and rejected the violations immediately:
 
 ```text
 > @rayrabbit-ai/ai-engineering@1.0.0 verify:gates
 > node scripts/verify-gates.mjs
 
+⚠️  WORKING TREE WARNING: Uncommitted local changes detected:
+  M package.json
+  M src/calculator.ts
+  M openspec/specs/math-engine/spec.md
+
 [GATE-VALIDATOR] Auditing commits between origin/main..HEAD...
 
 ❌ GATE VIOLATIONS DETECTED:
-  - [b70269f] TDD Causality Violation in 'feat(...)': No preceding 'test(red):' commit found in this branch.
+  - [b70269f] TDD Causality Violation in 'feat(green): implement power': Modified scope [calculator] does not match any active preceding test(red) [auth].
   - [bad45a0] Invariant 2 Violation: Modified legacy characterization suite without 'test(baseline): update <reason>'.
-  - [4154ab6] Unstaged working tree detected: 7 files modified without gate commit.
-  - [spec:gate] Master specification modified directly without active OpenSpec change proposal.
+  - [sdd1111] SDD Gate Violation in 'feat(green): direct specs tampering': Consolidated 'openspec/specs/' cannot be modified directly in implementation commits. Use delta specs in 'openspec/changes/' and consolidate with 'spec(sync):'.
 
 EXIT CODE: 1 (PUSH BLOCKED BY GATE VALIDATOR)
 ```

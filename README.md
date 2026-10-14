@@ -21,10 +21,11 @@ Unconstrained usage of AI coding assistants ("vibe coding") produces:
 * **Legacy Code Regressions**: Modifying existing code without an immutable safety net breaks undocumented historical behaviors.
 
 ### The Solution: Deterministic AI Engineering
-This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Driven Development (TDD)** and **Cryptographic CI/CD Gates**:
+This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Driven Development (TDD)** and **CI-Enforced Causal Git Commit Gates**:
 1. **Zero code without prior approved specification** (`openspec/specs/`).
-2. **Zero production code without a verified failing test (`test(red)`) in the terminal**.
-3. **Zero Pull Requests accepted if they violate the 15 Invariants or TDD causality**.
+2. **Zero production code without a verified failing test (`test(red)`) in the terminal with scope/module coupling**.
+3. **Zero Pull Requests accepted if they violate the 15 Invariants, TDD causality, or consolidated spec immutability**.
+4. **Built-in Adversarial Audit**: Pre-push validation via the [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md) subagent and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
 > 🔬 **Empirical Evidence**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) proving how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
 

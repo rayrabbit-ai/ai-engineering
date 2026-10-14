@@ -1,4 +1,4 @@
-# Manual Operativo y Runbook de Prompts (P0 – P11)
+# Manual Operativo y Runbook de Prompts (P0 – P12)
 
 [English](OPERATIONAL_MANUAL.md) | [Español](MANUAL_OPERATIVO.es.md)
 
@@ -40,20 +40,20 @@ flowchart TD
 * **Cuándo usarlo:** Módulos greenfield (código nuevo), requerimientos bien delimitados, corrección de bugs con reproducción clara e implementación de tareas rutinarias.
 * **Cómo funciona:** El operador humano suministra una única directiva de alto nivel (por ejemplo, mediante `/opsx-propose` o un prompt con requerimientos estructurados). Como el contexto del agente incluye `.agent/rules/INVARIANTS.md`, el LLM interioriza las 15 invariantes como salvaguardas cognitivas innegociables. El agente auto-orquesta el ciclo de vida completo de forma desatendida:
   1. Genera los 4 artefactos de OpenSpec (`proposal.md`, `design.md`, `spec.md`, `tasks.md`).
-  2. Ejecuta la Fase 2 (RED) y realiza el commit `test(red): <tarea>`.
+  2. Ejecuta la Fase 2 (RED) y realiza el commit `test(red): <tarea>` con acoplamiento de ámbito.
   3. Ejecuta la Fase 3 (GREEN) y realiza el commit `feat(green): <tarea>`.
   4. Ejecuta Fase 4 (REFACTOR), Fase 5 (INTEGRACIÓN) y Fase 6 (HARDENING).
   5. Valida E2E y ejecuta la sincronización y archivado del cambio.
-* **Mecanismo de garantía:** La confianza ciega se reemplaza por auditoría criptográfica. Al terminar, el operador o el CI ejecutan `npm run verify:gates` (o `python scripts/verify_gates.py`). Si el agente omitió la fase roja, mezcló tests con código productivo en un solo commit o bajó la cobertura de 80%, **la compuerta falla y el push queda bloqueado**.
+* **Mecanismo de garantía:** La confianza ciega se reemplaza por auditoría causal determinista en Git CI. Al terminar, el operador o el CI ejecutan `npm run verify:gates` (o `python scripts/verify_gates.py`). Si el agente omitió la fase roja, desacopló el ámbito de los archivos modificados, mezcló tests con código productivo en un solo commit o bajó la cobertura de 80%, **la compuerta falla y el push queda bloqueado**.
 
 ### Modo 2: Supervisado Human-in-the-Loop (HITL)
 * **Cuándo usarlo:** Refactorización de código legacy, alta deuda arquitectónica, rutas críticas de seguridad/protocolos, bases de código brownfield no caracterizadas y onboarding de nuevos desarrolladores.
-* **Cómo funciona:** El operador humano actúa como copiloto riguroso, guiando al agente a través del **Playbook de Prompts P0 a P11**. El agente tiene la instrucción estricta de detenerse tras cada compuerta (`STOP y repórtame`).
+* **Cómo funciona:** El operador humano actúa como copiloto riguroso, guiando al agente a través del **Playbook de Prompts P0 a P12**. El agente tiene la instrucción estricta de detenerse tras cada compuerta (`STOP y repórtame`).
   1. El operador emite **P0 (Triage)** y valida la tabla de enrutamiento.
   2. Si se toca código legacy, emite **P1 (Characterize)** y verifica el commit `@legacy-baseline`.
   3. Emite **P2 (RED)**, valida el fallo legítimo en terminal y revisa el commit `test(red)`.
   4. Aprueba la compuerta roja y emite **P3 (GREEN)**, inspeccionando el diff de implementación mínima.
-  5. Recorre secuencialmente desde **P4 (Refactor)** hasta **P8 (Cierre)**.
+  5. Recorre secuencialmente desde **P4 (Refactor)** hasta **P8 (Cierre)** y **P12 (Auditoría Adversarial Pre-Push)**.
 * **Mecanismo de garantía:** Inspección visual humana en cada frontera de fase complementada por la auditoría automatizada en CI.
 
 ---
@@ -62,7 +62,7 @@ flowchart TD
 
 | Dimensión | Modo 1: Autónomo Guiado por Invariantes | Modo 2: Supervisado Human-in-the-Loop |
 |---|---|---|
-| **Esfuerzo Humano** | Mínimo (1 directiva inicial + auditoría final) | Activo (secuencia de prompts guiada P0–P11) |
+| **Esfuerzo Humano** | Mínimo (1 directiva inicial + auditoría final) | Activo (secuencia de prompts guiada P0–P12) |
 | **Velocidad de Ejecución** | Alta (ejecución continua multi-fase desatendida) | Deliberada e iterativa (compuertas controladas) |
 | **Escenario Ideal** | Features greenfield, herramientas SDK, patrones conocidos | Código brownfield, protocolos core, seguridad |
 | **Garantía de Compuertas** | Automatizada vía `verify:gates` y CI `gate-validator.yml` | Inspección humana en tiempo real + CI `verify:gates` |
@@ -93,7 +93,7 @@ Al inicio de cualquier tarea, se ejecuta el prompt **P0 (Triage)** para clasific
 
 ---
 
-## 4. Secuencia de Prompts Operativos (P0 a P11)
+## 4. Secuencia de Prompts Operativos (P0 a P12)
 
 Para el **Modo 2 (Supervisado HITL)** o ejecución de fases específicas, copia y pega estos prompts en tu chat con el agente:
 
@@ -111,16 +111,16 @@ Procede con /opsx-characterize sobre los módulos legacy marcados sin baseline e
 Inventaría el comportamiento observable ACTUAL sin modificar código de producción. Crea tests con tag @legacy-baseline y @known-bug:<id>. Ejecútalos en terminal mostrando que son 100% VERDES contra el código intocado. Haz un commit exclusivo "test(baseline): characterization <modulo>".
 ```
 
-### P2 — Apply + RED (Compuerta RED)
+### P2 — Apply + RED (Compuerta RED con Ámbito)
 ```text
 Procede con /opsx-apply sobre el change del triage aplicando estrictamente el skill tdd-workflows-tdd-cycle.
-Compuerta Fase 2 (RED): crea primero los tests, ejecútalos en terminal y muéstrame el fallo legítimo antes de tocar producción. La suite @legacy-baseline debe seguir verde. Realiza el commit "test(red): <tarea>". Luego STOP y repórtame.
+Compuerta Fase 2 (RED): crea primero los tests, ejecútalos en terminal y muéstrame el fallo legítimo antes de tocar producción. La suite @legacy-baseline debe seguir verde. Realiza el commit "test(red)(<modulo>): <tarea>". Luego STOP y repórtame.
 ```
 
-### P3 — GREEN (Implementación Mínima)
+### P3 — GREEN (Implementación Mínima Acoplada)
 ```text
 Confirmo compuerta RED. Procede con Fase 3 (GREEN) del change en curso.
-Implementa el código MÍNIMO estricto para hacer pasar los tests en rojo, sin añadir features extra. Ejecuta la suite completa en terminal: debe estar 100% verde con reporte de cobertura (≥80% líneas / ≥75% ramas). Legacy-guard sobre los módulos caracterizados verificado. Commit "feat(green): <tarea>". Luego STOP y repórtame.
+Implementa el código MÍNIMO estricto para hacer pasar los tests en rojo, sin añadir features extra y resolviendo el ámbito exacto del test. Ejecuta la suite completa en terminal: debe estar 100% verde con reporte de cobertura (≥80% líneas / ≥75% ramas). Legacy-guard sobre los módulos caracterizados verificado. Commit "feat(green)(<modulo>): <tarea>". Luego STOP y repórtame.
 ```
 
 ### P4 — REFACTOR (Calidad con Suite Verde)
@@ -158,7 +158,7 @@ Cierra el change en curso: /opsx-sync y luego /opsx-archive SOLO si la DoD está
 ### P9 — Corrección de Defectos (Bugfix)
 ```text
 Procede con /opsx-bugfix sobre el siguiente reporte: [PEGA AQUÍ EL BUG EN LENGUAJE NATURAL].
-Test de regresión primero, muestra el fallo legítimo en terminal antes de tocar producción; fix mínimo; suite completa + @legacy-baseline verde; commit "fix: <descripcion>"; métrica escape +1.
+Test de regresión primero, muestra el fallo legítimo en terminal antes de tocar producción; fix mínimo; suite completa + @legacy-baseline verde; commit "fix(<modulo>): <descripcion>"; métrica escape +1.
 ```
 
 ### P10 — Actualización de Especificación
@@ -171,4 +171,10 @@ Actualiza proposal.md, design.md y specs/ antes de escribir cualquier código. C
 ```text
 Failure Recovery sobre el change en curso: STOP.
 Identifica qué fase se violó, realiza rollback al último commit de compuerta válido (git log --oneline), retoma desde la fase correcta con el prompt correspondiente y documenta la lección aprendida.
+```
+
+### P12 — Auditoría Adversarial Pre-Push
+```text
+Procede con /opsx-audit sobre la rama antes de hacer push o abrir el Pull Request.
+Ejecuta los self-tests de verify-gates (Node.js y Python), valida el estado del árbol de trabajo, confirma la paridad entre especificaciones consolidadas y código, y verifica que no existan evasiones de compuerta ni mocks en producción.
 ```

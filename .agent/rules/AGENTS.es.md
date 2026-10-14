@@ -12,15 +12,16 @@ En este repositorio, el agente de IA no actúa como un generador improvisado de 
 - **Zero Hallucination Policy**: Todo comportamiento se valida mediante aserciones formales y contratos verificables.
 - **Sin Mocks en Producción**: 100% código funcional. Los dobles de prueba (mocks/stubs) solo se permiten en tests unitarios para aislamiento de dependencias externas.
 - **Agnosticismo de Entorno**: En Python usar siempre `pathlib.Path` e `importlib.resources`. Prohibido hardcodear rutas con `os.path` o modificar `sys.path`.
-- **Disciplina TDD Inquebrantable**: Todo código nuevo o modificado debe tener un commit `RED` que muestre el fallo legítimo en terminal antes del commit `GREEN`.
+- **Disciplina TDD Inquebrantable**: Todo código nuevo o modificado debe tener un commit `RED` que muestre el fallo legítimo en terminal antes del commit `GREEN`, con acoplamiento estricto de ámbito.
 
 ---
 
-## 2. Invariantes del Repositorio
+## 2. Invariantes y Reglas del Repositorio
 
 Consulta obligatoriamente:
 - [INVARIANTS.es.md](./INVARIANTS.es.md): Las 15 Invariantes TDD+SDD.
-- [SDD_GATE.es.md](./SDD_GATE.es.md): Compuerta de especificación previa a cambios de arquitectura.
+- [SDD_GATE.es.md](./SDD_GATE.es.md): Compuerta de especificación previa e inmutabilidad de `openspec/specs/`.
+- [ADVERSARIAL_AUDITOR.es.md](./ADVERSARIAL_AUDITOR.es.md): Protocolo de auditoría adversarial pre-push y comprobación de compuertas.
 
 ---
 

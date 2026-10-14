@@ -12,6 +12,8 @@ Verifica cuatro invariantes críticas en el historial de commits:
 4. Integridad de Especificaciones Consolidadas SDD:
    Las especificaciones consolidadas en 'openspec/specs/' no pueden ser alteradas directamente
    en commits de implementación; requieren sincronización mediante 'spec(sync):' o 'chore(archive):'.
+
+Hardened contra CWE-78 (Command Injection) y Bypasses de Scope (F-02, F-03, F-07).
 """
 
 import sys
@@ -102,6 +104,7 @@ def extract_module_name(file_path: str) -> str:
             base = base[:-len(ext)]
     if base.startswith("test_"):
         base = base[5:]
+    base = re.sub(r"^[._-]+|[._-]+$", "", base)
     return base.strip()
 
 def extract_scope_from_subject(subject: str, gate_type: str) -> str | None:
@@ -111,23 +114,50 @@ def extract_scope_from_subject(subject: str, gate_type: str) -> str | None:
         return match.group(1).lower().strip()
     return None
 
-def run_git(cmd: str) -> str:
+def is_valid_ref_format(ref: str) -> bool:
+    """
+    Validador estricto de referencias Git para mitigar CWE-78 (Command Injection).
+    Rechaza metacaracteres de shell y valida estructura con 'git check-ref-format'.
+    """
+    if not ref or not isinstance(ref, str):
+        return False
+    trimmed = ref.strip()
+    if not trimmed or len(trimmed) > 255:
+        return False
+    # Prohibir terminantemente metacaracteres de shell y saltos de línea
+    if re.search(r"[;&|`$><\r\n\t ]", trimmed):
+        return False
+    probe = subprocess.run(
+        ["git", "check-ref-format", "--allow-onelevel", trimmed],
+        capture_output=True,
+        text=True,
+        shell=False
+    )
+    if probe.returncode == 0:
+        return True
+    if re.match(r"^[a-zA-Z0-9/_.-]+(~[0-9]+|\^[0-9]*)*$", trimmed):
+        return True
+    return False
+
+def run_git(args: list[str]) -> str:
+    """Ejecuta comando git con paso seguro de argumentos (shell=False) contra CWE-78."""
     try:
-        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL).strip()
-    except subprocess.CalledProcessError:
+        res = subprocess.run(["git", *args], shell=False, capture_output=True, text=True)
+        return res.stdout.strip() if res.returncode == 0 else ""
+    except Exception:
         return ""
 
-def run_git_safe(cmd: str) -> str | None:
+def run_git_safe(args: list[str]) -> str | None:
     try:
-        res = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+        res = subprocess.run(["git", *args], shell=False, capture_output=True, text=True)
         if res.returncode == 0:
             return res.stdout.strip()
         return None
     except Exception:
         return None
 
-def run_git_or_throw(cmd: str, error_msg: str) -> str:
-    res = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+def run_git_or_throw(args: list[str], error_msg: str) -> str:
+    res = subprocess.run(["git", *args], shell=False, capture_output=True, text=True)
     if res.returncode != 0:
         err = res.stderr.strip() or res.stdout.strip()
         raise RuntimeError(f"{error_msg}: {err}")
@@ -139,7 +169,7 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
 
     for commit_hash, subject, changed_files in commits:
         subject_stripped = subject.strip()
-        short_hash = commit_hash[:7]
+        short_hash = (commit_hash or "0000000")[:7]
 
         # 1. Validar sintaxis de compuerta
         matched = any(re.match(pattern, subject_stripped, re.IGNORECASE) for pattern in VALID_PREFIXES)
@@ -170,14 +200,16 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
             explicit_scope = extract_scope_from_subject(subject_stripped, r"test\(red\)")
             file_scopes = [extract_module_name(f) for f in test_files if extract_module_name(f)]
 
-            if explicit_scope:
-                active_red_scopes.add(explicit_scope)
-                active_red_scopes.update(file_scopes)
+            # F-03: Prohibir scope universal fallback (*). Rechazar si no se puede inferir módulo y no hay scope explícito.
+            if not explicit_scope and not file_scopes:
+                errors.append(
+                    f"[{short_hash}] Violación de Invariante 1 en '{subject_stripped}': "
+                    f"No se pudo inferir un ámbito de módulo válido de los archivos de prueba [{', '.join(test_files)}] y no se declaró ningún ámbito explícito 'test(red)(<scope>):'."
+                )
             else:
-                if file_scopes:
-                    active_red_scopes.update(file_scopes)
-                else:
-                    active_red_scopes.add("*")
+                if explicit_scope:
+                    active_red_scopes.add(explicit_scope)
+                active_red_scopes.update(file_scopes)
 
         # 3. Validar Causalidad TDD con Acoplamiento por Ámbito (Invariantes 1 y 3)
         is_green = bool(re.match(r"^feat\(green\)(\([a-z0-9_-]+\))?:", subject_stripped, re.IGNORECASE))
@@ -195,25 +227,23 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                 prod_files = [f for f in changed_files if is_production_file(f)]
 
                 if prod_files:
-                    # Cada archivo de producción DEBE estar cubierto por los scopes activos de RED
+                    # Cada archivo de producción DEBE estar estrictamente cubierto por los scopes activos de RED
                     for p_file in prod_files:
                         p_module = extract_module_name(p_file)
-                        is_universal = "*" in active_red_scopes
-                        matches_module = p_module in active_red_scopes
-                        matches_explicit = explicit_target and (explicit_target in active_red_scopes) and (explicit_target == p_module)
+                        matches_module = bool(p_module and p_module in active_red_scopes)
+                        matches_explicit = bool(explicit_target and (explicit_target in active_red_scopes) and (explicit_target == p_module))
 
-                        if not is_universal and not matches_module and not matches_explicit:
+                        if not matches_module and not matches_explicit:
                             avail_str = ", ".join(sorted(active_red_scopes)) if active_red_scopes else "ninguno"
                             errors.append(
                                 f"[{short_hash}] Violación de Causalidad TDD en '{subject_stripped}': "
-                                f"El archivo de producción modificado '{p_file}' (módulo '{p_module}') no coincide con ningún test(red) activo previo [{avail_str}]."
+                                f"El archivo de producción modificado '{p_file}' (módulo '{p_module or 'anónimo'}') no coincide con ningún test(red) activo previo [{avail_str}]."
                             )
                 else:
                     target_scopes = [explicit_target] if explicit_target else [extract_module_name(f) for f in changed_files if extract_module_name(f)]
-                    is_universal = "*" in active_red_scopes
                     matched_scope = next((s for s in target_scopes if s in active_red_scopes), None)
 
-                    if not is_universal and not matched_scope:
+                    if not matched_scope and target_scopes:
                         avail_str = ", ".join(sorted(active_red_scopes)) if active_red_scopes else "ninguno"
                         tgt_str = ", ".join(target_scopes) if target_scopes else "sin ámbito identificado"
                         errors.append(
@@ -222,13 +252,11 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                         )
 
                 # Consumir scopes satisfechos
-                if "*" in active_red_scopes:
-                    active_red_scopes.remove("*")
                 if explicit_target and explicit_target in active_red_scopes:
                     active_red_scopes.remove(explicit_target)
                 for p_file in prod_files:
                     p_module = extract_module_name(p_file)
-                    if p_module in active_red_scopes:
+                    if p_module and p_module in active_red_scopes:
                         active_red_scopes.remove(p_module)
 
         # 4. Validar Inmutabilidad de Baseline (Invariante 2)
@@ -249,83 +277,84 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
             for f in changed_files
         )
         if touches_consolidated_specs:
-            is_allowed_sync = bool(re.match(r"^(spec\(sync\)|chore\(archive\)|spec\(baseline\))", subject_stripped, re.IGNORECASE))
-            if not is_allowed_sync:
+            is_allowed = bool(re.match(r"^(spec\(sync\)|chore\(archive\)|spec\(baseline\))", subject_stripped, re.IGNORECASE))
+            if not is_allowed:
                 errors.append(
-                    f"[{short_hash}] Violación de Compuerta SDD en '{subject_stripped}': No se permite modificar directamente "
-                    f"'openspec/specs/' consolidado en commits de implementación. Utilice delta specs en 'openspec/changes/' "
-                    f"y consolide mediante 'spec(sync):'."
+                    f"[{short_hash}] Violación de Compuerta SDD en '{subject_stripped}': No se permite modificar "
+                    f"directamente 'openspec/specs/' consolidado en commits de implementación. "
+                    f"Use delta specs en 'openspec/changes/' y consolide mediante 'spec(sync):'."
                 )
 
     return errors
 
-def self_test() -> int:
-    print("[SELF-TEST] Ejecutando pruebas unitarias de verify_gates.py...")
-    
-    # Caso 1: Flujo perfecto RED -> GREEN -> REFACTOR con inferencia de módulo
-    valid_flow = [
-        ("c111111", "test(red): failing test", ["tests/unit/test_calc.py"]),
-        ("c222222", "feat(green): implementa suma minima", ["src/calc.py"]),
-        ("c333333", "refactor: simplifica retorno", ["src/calc.py"]),
-    ]
-    errs1 = validate_commit_list(valid_flow)
-    assert len(errs1) == 0, f"Error inesperado en flujo valido: {errs1}"
+def self_test():
+    print("[SELF-TEST] Iniciando autoverificación determinista de verify_gates.py...")
 
-    # Caso 2: Flujo con scopes explícitos válidos
+    # Caso 1: Flujo válido en Python
+    valid_commits = [
+        ("c111111", "test(red): failing test for math logic", ["tests/test_calculator.py"]),
+        ("c222222", "feat(green): implement add operation", ["src/calculator.py"]),
+        ("c333333", "refactor: simplify math expression", ["src/calculator.py"])
+    ]
+    errs = validate_commit_list(valid_commits)
+    assert not errs, f"Falló validación de flujo válido: {errs}"
+
+    # Caso 2: Scope explícito concordante
     valid_explicit = [
-        ("c444444", "test(red)(auth): failing auth", ["tests/test_auth.py"]),
-        ("c555555", "feat(green)(auth): implement auth", ["src/auth.py"]),
+        ("c444444", "test(red)(auth): failing token validation", ["tests/test_auth.py"]),
+        ("c555555", "feat(green)(auth): implement token parser", ["src/auth.py"])
     ]
     errs_exp = validate_commit_list(valid_explicit)
-    assert len(errs_exp) == 0, f"Error inesperado en flujo explícito: {errs_exp}"
+    assert not errs_exp, f"Falló scope explícito concordante: {errs_exp}"
 
-    # Caso 3: Ataque Adversarial Copilot (RED en a, GREEN en b) -> DEBE FALLAR
+    # Caso 3: Ataque Adversarial de Copilot (RED en a, GREEN no relacionado en b) -> DEBE SER RECHAZADO
     adversarial_copilot = [
-        ("c666666", "test(red): failing test in a", ["tests/a.test.py"]),
-        ("c777777", "feat(green): implement b without test", ["src/b.py"]),
+        ("cadv111", "test(red): failing test in a", ["tests/test_a.py"]),
+        ("cadv222", "feat(green): implement b without test", ["src/b.py"])
     ]
     errs_copilot = validate_commit_list(adversarial_copilot)
-    assert any("no coincide con ningún test(red) activo previo" in e for e in errs_copilot), "Falló bloqueo adversarial Copilot"
+    assert any("no coincide con ningún test(red) activo previo" in e for e in errs_copilot), "Falló bloqueo adversarial Copilot (a != b)"
 
-    # Caso 4: Violación de Causalidad (GREEN sin RED previo)
-    invalid_causality = [
-        ("c888888", "feat(green): implementa suma sin test previo", ["src/calc.py"])
+    # Caso 4: Scope explícito discordante (auth vs billing) -> DEBE SER RECHAZADO
+    mismatch_scope = [
+        ("c666666", "test(red)(auth): failing test", ["tests/test_auth.py"]),
+        ("c777777", "feat(green)(billing): implement billing logic", ["src/billing.py"])
     ]
-    errs_caus = validate_commit_list(invalid_causality)
-    assert any("Causalidad TDD" in e for e in errs_caus), "Fallo deteccion de causalidad TDD"
+    errs_mis = validate_commit_list(mismatch_scope)
+    assert any("no coincide con ningún test(red) activo previo" in e for e in errs_mis), "Falló detección de scopes discordantes"
 
-    # Caso 5: Consumo de RED (doble GREEN sin segundo RED)
-    double_green = [
-        ("c999999", "test(red): test calc", ["tests/test_calc.py"]),
-        ("caaaaaa", "feat(green): impl calc 1", ["src/calc.py"]),
-        ("cbbbbbb", "feat(green): impl calc 2", ["src/calc.py"]),
-    ]
-    errs_dg = validate_commit_list(double_green)
-    assert any("Causalidad TDD" in e for e in errs_dg), "Fallo detección de doble GREEN no autorizado"
-
-    # Caso 6: Violación de Invariante 2 (tocó baseline sin update)
+    # Caso 5: Alteración de Baseline Legacy sin 'test(baseline): update' -> DEBE SER RECHAZADO
     invalid_baseline = [
-        ("cccccc", "test(red): nuevo test", ["tests/unit/test_calc.py"]),
-        ("cdddddd", "feat(green): fix en baseline", ["tests/characterization/test_calc.py"])
+        ("c888888", "test(red): add case", ["tests/unit/test_new.py"]),
+        ("c999999", "feat(green): touch baseline illegally", ["tests/characterization/test_legacy.py"])
     ]
     errs_base = validate_commit_list(invalid_baseline)
-    assert any("Invariante 2" in e for e in errs_base), "Fallo deteccion de Invariante 2"
+    assert any("Invariante 2" in e for e in errs_base), "Falló protección de baseline legacy"
 
-    # Caso 7: Violación de Compuerta SDD (modificación directa a openspec/specs/)
+    # Caso 6: Causalidad rota (código sin test en rojo previo) -> DEBE SER RECHAZADO
+    no_red = [
+        ("caaaaaa", "feat(green): direct code without test", ["src/calculator.py"])
+    ]
+    errs_nr = validate_commit_list(no_red)
+    assert any("Causalidad TDD" in e for e in errs_nr), "Falló detección de causalidad rota"
+
+    # Caso 7: Consumo de RED (segundo GREEN sin segundo RED) -> DEBE SER RECHAZADO
+    double_green = [
+        ("cbbbbbb", "test(red): add single test", ["tests/test_calc.py"]),
+        ("cccccc", "feat(green): first implementation", ["src/calc.py"]),
+        ("cdddddd", "feat(green): second implementation without red", ["src/calc.py"])
+    ]
+    errs_dg = validate_commit_list(double_green)
+    assert any("Causalidad TDD" in e for e in errs_dg), "Falló detección de segundo GREEN no autorizado"
+
+    # Caso 8: Violación de Compuerta SDD (tocar specs/ directamente) -> DEBE SER RECHAZADO
     invalid_sdd = [
-        ("ceeeeee", "feat(green): direct specs tampering", ["openspec/specs/auth.md"])
+        ("ceeeeee", "feat(green): bypass spec change process", ["openspec/specs/core.md"])
     ]
     errs_sdd = validate_commit_list(invalid_sdd)
-    assert any("Compuerta SDD" in e for e in errs_sdd), "Fallo detección de alteración directa de specs consolidadas"
+    assert any("Compuerta SDD" in e for e in errs_sdd), "Falló protección de especificaciones consolidadas SDD"
 
-    # Caso 8: Sincronización válida de SDD
-    valid_sdd = [
-        ("cffffff", "spec(sync): consolidate specs", ["openspec/specs/auth.md"])
-    ]
-    errs_vsdd = validate_commit_list(valid_sdd)
-    assert len(errs_vsdd) == 0, f"Error en sync válida de SDD: {errs_vsdd}"
-
-    # Caso 9: Ataque Adversarial: test(red) que modifica código de producción en src/ -> DEBE FALLAR
+    # Caso 9: Ataque Adversarial: test(red) que modifica código de producción en src/ -> DEBE SER RECHAZADO
     invalid_red_prod = [
         ("credprod", "test(red): smuggle production code", ["tests/unit/test_calc.py", "src/calc.py"])
     ]
@@ -348,11 +377,24 @@ def self_test() -> int:
     errs_mg = validate_commit_list(invalid_multi_green)
     assert any("archivo de producción modificado 'src/billing.py'" in e and "no coincide con ningún test(red) activo previo" in e for e in errs_mg), "Falló bloqueo de contrabando multirruta en GREEN"
 
+    # Caso 12 (F-03 Audit): Bypass con archivo de test que produce nombre vacío tipo tests/test_.py sin scope explícito -> RECHAZADO
+    invalid_empty_module = [
+        ("cf03red1", "test(red): empty module test", ["tests/test_.py"]),
+        ("cf03grn1", "feat(green): unrelated implementation", ["src/unrelated.ts"])
+    ]
+    errs_empty = validate_commit_list(invalid_empty_module)
+    assert any("No se pudo inferir un ámbito de módulo válido" in e for e in errs_empty), "FALLÓ VULNERABILIDAD F-03: verify_gates.py permitió bypass con módulo vacío"
+
+    # Caso 13 (F-02 Audit): Mitigación CWE-78 en referencias Git
+    malicious_ref = 'HEAD; printf "PYTHON_INJECTION_PROBE|test(red): injected"'
+    assert not is_valid_ref_format(malicious_ref), "FALLÓ VULNERABILIDAD F-02 (CWE-78): is_valid_ref_format aceptó inyección"
+    assert is_valid_ref_format("HEAD") and is_valid_ref_format("origin/main") and is_valid_ref_format("main~1"), "is_valid_ref_format rechazó ref válida"
+
     print("[SELF-TEST] ✅ Todas las aserciones internas y pruebas adversariales pasaron con éxito.\n")
     return 0
 
 def check_clean_working_tree(allow_dirty: bool = False):
-    status = run_git("git status --porcelain")
+    status = run_git(["status", "--porcelain"])
     if status:
         if allow_dirty:
             print("\n⚠️  ADVERTENCIA DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados (--allow-dirty activo):")
@@ -364,6 +406,10 @@ def check_clean_working_tree(allow_dirty: bool = False):
                 print(f"  {line}")
             print("\nPara continuar, confirme (commit) o descarte (stash/clean) los cambios, o pase el flag --allow-dirty.")
             sys.exit(1)
+
+def is_root_commit(sha: str) -> bool:
+    parents = run_git(["rev-list", "--parents", "-n", "1", sha])
+    return len(parents.split()) == 1 if parents else False
 
 def main():
     parser = argparse.ArgumentParser(description="Validador de Commits por Compuerta (RayRabbit AI Engineering)")
@@ -378,17 +424,23 @@ def main():
 
     check_clean_working_tree(args.allow_dirty)
 
-    # 1. Resolver HEAD
+    # 1. Resolver HEAD de forma segura
     head = args.head or "HEAD"
-    head_sha = run_git_safe(f"git rev-parse --verify {head}")
+    if not is_valid_ref_format(head):
+        print(f"❌ ERROR DE SEGURIDAD GIT: La referencia HEAD '{head}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).")
+        return 1
+    head_sha = run_git_safe(["rev-parse", "--verify", head])
     if not head_sha:
         print(f"❌ ERROR DE RESOLUCIÓN GIT: No se pudo resolver la referencia HEAD '{head}'. Verifique que esté dentro de un repositorio Git con commits.")
         return 1
 
-    # 2. Resolver BASE
+    # 2. Resolver BASE de forma segura
     base = args.base
     if base:
-        base_sha = run_git_safe(f"git rev-parse --verify {base}")
+        if not is_valid_ref_format(base):
+            print(f"❌ ERROR DE SEGURIDAD GIT: La referencia base '{base}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).")
+            return 1
+        base_sha = run_git_safe(["rev-parse", "--verify", base])
         if not base_sha:
             print(f"❌ ERROR DE COMPUERTA: La referencia base especificada '{base}' no existe en el repositorio.")
             print("Si está ejecutando en local sin remotos configurados, ejecute 'python scripts/verify_gates.py --base <commit-o-rama>' o agregue el remote correspondiente.")
@@ -397,21 +449,27 @@ def main():
         # Si no se pasó --base, buscar candidatos válidos
         candidates = ["origin/main", "origin/master", "main", "master"]
         for cand in candidates:
-            sha = run_git_safe(f"git rev-parse --verify {cand}")
+            sha = run_git_safe(["rev-parse", "--verify", cand])
             if sha and sha != head_sha:
                 base = cand
                 break
 
         if not base:
-            prev_sha = run_git_safe("git rev-parse --verify HEAD~1")
+            prev_sha = run_git_safe(["rev-parse", "--verify", "HEAD~1"])
             if prev_sha:
                 base = "HEAD~1"
                 print(f"[GATE-INFO] No se detectó remote origin/main. Usando fallback local seguro: base = HEAD~1")
             else:
-                # Es un repositorio de un solo commit inicial
+                # F-07: Manejo de repositorio en commit inicial / plantilla
+                subject = run_git_safe(["log", "-1", "--format=%s", head_sha]) or ""
+                is_template_seed = bool(re.search(r"^(initial\s+commit|feat:\s*initial|chore:\s*initial|template:)", subject.strip(), re.IGNORECASE))
+                if is_root_commit(head_sha) and is_template_seed:
+                    print(f"[GATE-INFO] Commit raíz / semilla de template detectado ({head_sha[:7]}): '{subject.strip()}'.")
+                    print("✅ COMMIT INICIAL DEL TEMPLATE ACEPTADO COMO LÍNEA BASE VÁLIDA.")
+                    return 0
+
                 print(f"[GATE-INFO] Repositorio en commit inicial ({head_sha[:7]}). Auditando el commit inicial...")
-                files = (run_git_safe(f"git diff-tree --no-commit-id --name-only -r {head_sha}") or "").splitlines()
-                subject = run_git_safe(f"git log -1 --format='%s' {head_sha}") or ""
+                files = (run_git_safe(["diff-tree", "--no-commit-id", "--name-only", "-r", head_sha]) or "").splitlines()
                 errors = validate_commit_list([(head_sha, subject, files)])
                 if errors:
                     print("\n❌ VIOLACIONES DE COMPUERTA DETECTADAS EN COMMIT INICIAL:")
@@ -423,7 +481,7 @@ def main():
 
     rev_range = f"{base}..{head}"
     try:
-        raw_commits = run_git_or_throw(f"git log --reverse --format='%H|%s' {rev_range}", f"Fallo al obtener commits en el rango '{rev_range}'")
+        raw_commits = run_git_or_throw(["log", "--reverse", "--format=%H|%s", rev_range], f"Fallo al obtener commits en el rango '{rev_range}'")
     except RuntimeError as err:
         print(f"❌ ERROR DE RESOLUCIÓN GIT:\n{err}")
         return 1
@@ -436,7 +494,7 @@ def main():
     for line in raw_commits.splitlines():
         if "|" in line:
             h, s = line.split("|", 1)
-            files = (run_git_safe(f"git diff-tree --no-commit-id --name-only -r {h}") or "").splitlines()
+            files = (run_git_safe(["diff-tree", "--no-commit-id", "--name-only", "-r", h]) or "").splitlines()
             commits.append((h, s, files))
 
     print(f"[GATE-VALIDATOR] Analizando {len(commits)} commits en {rev_range}...")

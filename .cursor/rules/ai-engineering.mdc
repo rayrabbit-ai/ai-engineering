@@ -1,0 +1,15 @@
+---
+description: Deterministic AI Engineering Harness Rules for Cursor
+globs: *
+alwaysApply: true
+---
+
+# Deterministic AI Engineering — Cursor MDC Rules
+
+This project enforces strict CI commit gates, Spec-Driven Development, and scope-coupled TDD causality.
+
+- **Canonical Rules**: Refer to `.agent/rules/INVARIANTS.md` and `.agent/rules/AGENTS.md`.
+- **Commit Gates**: Every commit must use `test(red):`, `feat(green):`, `refactor:`, `test(baseline): update`, or `spec(sync):`.
+- **Scope Coupling**: `feat(green)` must match the module of the preceding `test(red)`.
+- **Zero Bypass**: `test(red)` cannot touch `src/`. Universal wildcards are strictly rejected.
+- **Coverage Minimums**: Lines >= 80%, Branches >= 75%.

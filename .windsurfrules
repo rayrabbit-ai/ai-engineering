@@ -1,0 +1,9 @@
+# Windsurf Cascade Directives — Deterministic AI Engineering Harness
+
+You are operating inside the RayRabbit AI Engineering Harness.
+
+1. Follow `.agent/rules/INVARIANTS.md` strictly.
+2. Commits must follow deterministic gate prefixes: `test(red):`, `feat(green):`, `refactor:`, `test(baseline): update`, `spec(sync):`.
+3. Strict TDD: Write failing tests (`test(red):`) before production code (`feat(green):`).
+4. Scope Coupling: Production code changes must match the scope of the test.
+5. Coverage: Ensure lines >= 80% and branches >= 75%.

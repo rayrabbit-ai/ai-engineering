@@ -15,9 +15,11 @@
  * 4. Integridad de Especificaciones SDD (Invariante SDD):
  *    Las especificaciones consolidadas en 'openspec/specs/' no pueden ser alteradas directamente
  *    en commits de implementación; requieren sincronización controlada ('spec(sync):' o 'chore(archive):').
+ * 
+ * Hardened contra CWE-78 (Command Injection) y Bypasses de Scope (F-02, F-03, F-07).
  */
 
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 
 export const VALID_PREFIXES = [
@@ -78,6 +80,7 @@ export function extractModuleName(filePath) {
   let base = fileName.replace(/\.[a-zA-Z0-9]+$/, '');
   base = base.replace(/(\.spec|\.test|_test)$/i, '');
   base = base.replace(/^test_/i, '');
+  base = base.replace(/^[._-]+|[._-]+$/g, '');
   return base.toLowerCase().trim();
 }
 
@@ -87,29 +90,57 @@ export function extractScopeFromSubject(subject, gateType) {
   return match && match[1] ? match[1].toLowerCase().trim() : null;
 }
 
-function runGit(cmd) {
+/**
+ * Validador estricto de referencias Git para mitigar CWE-78 (Command Injection).
+ * Rechaza metacaracteres de shell y valida estructura con 'git check-ref-format'.
+ */
+export function isValidRefFormat(ref) {
+  if (!ref || typeof ref !== 'string') return false;
+  const trimmed = ref.trim();
+  if (trimmed.length === 0 || trimmed.length > 255) return false;
+  // Prohibir terminantemente metacaracteres de shell y saltos de línea
+  if (/[;&|`$><\r\n\t ]/.test(trimmed)) return false;
+  // Permitir revisiones compuestas legítimas (ej. HEAD~1, origin/main, v1.0.0, commits SHA-1/2)
+  const probe = spawnSync('git', ['check-ref-format', '--allow-onelevel', trimmed], {
+    encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'ignore'],
+  });
+  if (probe.status === 0) return true;
+  // Soporte para sufijos de revisión git válidos como HEAD~1, HEAD^, branch~2
+  if (/^[a-zA-Z0-9/_.-]+(~[0-9]+|\^[0-9]*)*$/.test(trimmed)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Ejecutor seguro de Git sin shell para evitar CWE-78 (Command Injection).
+ */
+export function runGit(args) {
   try {
-    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    const res = spawnSync('git', args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
+    return res.status === 0 ? res.stdout.trim() : '';
   } catch {
     return '';
   }
 }
 
-function runGitSafe(cmd) {
+export function runGitSafe(args) {
   try {
-    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const res = spawnSync('git', args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    return res.status === 0 ? res.stdout.trim() : null;
   } catch {
     return null;
   }
 }
 
-function runGitOrThrow(cmd, errorMsg) {
-  try {
-    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  } catch (err) {
-    const stderr = err.stderr ? err.stderr.toString().trim() : '';
-    throw new Error(`${errorMsg}: ${stderr || err.message}`);
+export function runGitOrThrow(args, errorMsg) {
+  const res = spawnSync('git', args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+  if (res.status !== 0) {
+    const stderr = res.stderr ? res.stderr.trim() : '';
+    throw new Error(`${errorMsg}: ${stderr || 'Exit code ' + res.status}`);
   }
+  return res.stdout.trim();
 }
 
 export function validateCommitList(commits) {
@@ -118,7 +149,7 @@ export function validateCommitList(commits) {
 
   for (const { hash, subject, changedFiles = [] } of commits) {
     const trimmedSubject = subject.trim();
-    const shortHash = hash.slice(0, 7);
+    const shortHash = (hash || '0000000').slice(0, 7);
 
     // 1. Validar Nomenclatura de Compuerta
     const matchesPrefix = VALID_PREFIXES.some((pattern) => pattern.test(trimmedSubject));
@@ -149,15 +180,16 @@ export function validateCommitList(commits) {
       const explicitScope = extractScopeFromSubject(trimmedSubject, 'test\\(red\\)');
       const fileScopes = testFiles.map(extractModuleName).filter(Boolean);
 
-      if (explicitScope) {
-        activeRedScopes.add(explicitScope);
-        fileScopes.forEach((s) => activeRedScopes.add(s));
+      // F-03: Prohibir scope universal fallback (*). Rechazar si no se puede inferir módulo y no hay scope explícito.
+      if (!explicitScope && fileScopes.length === 0) {
+        errors.push(
+          `[${shortHash}] Violación de Invariante 1 en '${trimmedSubject}': No se pudo inferir un ámbito de módulo válido de los archivos de prueba [${testFiles.join(', ')}] y no se declaró ningún ámbito explícito 'test(red)(<scope>):'.`
+        );
       } else {
-        if (fileScopes.length > 0) {
-          fileScopes.forEach((s) => activeRedScopes.add(s));
-        } else {
-          activeRedScopes.add('*');
+        if (explicitScope) {
+          activeRedScopes.add(explicitScope);
         }
+        fileScopes.forEach((s) => activeRedScopes.add(s));
       }
     }
 
@@ -176,27 +208,23 @@ export function validateCommitList(commits) {
         const prodFiles = changedFiles.filter(isProductionFile);
 
         if (prodFiles.length > 0) {
-          // Cada archivo de producción DEBE estar cubierto por los scopes activos de RED
+          // Cada archivo de producción DEBE estar estrictamente cubierto por los scopes activos de RED
           for (const pFile of prodFiles) {
             const pModule = extractModuleName(pFile);
-            const isUniversal = activeRedScopes.has('*');
-            const matchesModule = activeRedScopes.has(pModule);
-            const matchesExplicit = explicitTargetScope && activeRedScopes.has(explicitTargetScope) && (explicitTargetScope === pModule);
+            const matchesModule = Boolean(pModule && activeRedScopes.has(pModule));
+            const matchesExplicit = Boolean(explicitTargetScope && activeRedScopes.has(explicitTargetScope) && (explicitTargetScope === pModule));
 
-            if (!isUniversal && !matchesModule && !matchesExplicit) {
+            if (!matchesModule && !matchesExplicit) {
               const available = Array.from(activeRedScopes).join(', ') || 'ninguno';
               errors.push(
-                `[${shortHash}] Violación de Causalidad TDD en '${trimmedSubject}': El archivo de producción modificado '${pFile}' (módulo '${pModule}') no coincide con ningún test(red) activo previo [${available}].`
+                `[${shortHash}] Violación de Causalidad TDD en '${trimmedSubject}': El archivo de producción modificado '${pFile}' (módulo '${pModule || 'anónimo'}') no coincide con ningún test(red) activo previo [${available}].`
               );
             }
           }
         } else {
-          // Si no modificó archivos de producción directamente, verificar el scope explícito o modificado
-          let targetScopes = explicitTargetScope ? [explicitTargetScope] : changedFiles.map(extractModuleName).filter(Boolean);
-          const isUniversalMatch = activeRedScopes.has('*');
-          const matchedScope = targetScopes.find((s) => activeRedScopes.has(s));
-
-          if (!isUniversalMatch && !matchedScope) {
+          const targetScopes = [explicitTargetScope].filter(Boolean);
+          const hasMatchingScope = targetScopes.some((s) => activeRedScopes.has(s));
+          if (!hasMatchingScope && targetScopes.length > 0) {
             const available = Array.from(activeRedScopes).join(', ') || 'ninguno';
             const targetStr = targetScopes.join(', ') || 'sin ámbito identificado';
             errors.push(
@@ -206,15 +234,12 @@ export function validateCommitList(commits) {
         }
 
         // Consumir scopes satisfechos
-        if (activeRedScopes.has('*')) {
-          activeRedScopes.delete('*');
-        }
         if (explicitTargetScope && activeRedScopes.has(explicitTargetScope)) {
           activeRedScopes.delete(explicitTargetScope);
         }
         for (const pFile of prodFiles) {
           const pModule = extractModuleName(pFile);
-          if (activeRedScopes.has(pModule)) {
+          if (pModule && activeRedScopes.has(pModule)) {
             activeRedScopes.delete(pModule);
           }
         }
@@ -370,11 +395,30 @@ export function selfTest() {
     throw new Error('FALLÓ VULNERABILIDAD ADVERSARIAL: verify-gates.mjs permitió contrabandear src/billing.ts en un GREEN con scope auth.');
   }
 
-  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo pruebas adversariales Copilot y SDD) pasaron exitosamente.');
+  // Caso 13 (F-03 Audit): Bypass con archivo de test que produce nombre vacío tipo tests/test_.py sin scope explícito -> RECHAZADO
+  const invalidEmptyModule = [
+    { hash: 'f03red1', subject: 'test(red): empty module test', changedFiles: ['tests/test_.py'] },
+    { hash: 'f03grn1', subject: 'feat(green): unrelated implementation', changedFiles: ['src/unrelated.ts'] }
+  ];
+  const errsEmptyModule = validateCommitList(invalidEmptyModule);
+  if (!errsEmptyModule.some((e) => e.includes('No se pudo inferir un ámbito de módulo válido'))) {
+    throw new Error('FALLÓ VULNERABILIDAD F-03: verify-gates.mjs permitió bypass de scope con nombre de módulo vacío.');
+  }
+
+  // Caso 14 (F-02 Audit): Mitigación CWE-78 en referencias Git
+  const maliciousRef = 'HEAD; printf "NODE_INJECTION_PROBE|test(red): injected"';
+  if (isValidRefFormat(maliciousRef)) {
+    throw new Error('FALLÓ VULNERABILIDAD F-02 (CWE-78): isValidRefFormat aceptó referencia con inyección de comandos.');
+  }
+  if (!isValidRefFormat('HEAD') || !isValidRefFormat('origin/main') || !isValidRefFormat('main~1')) {
+    throw new Error('FALLÓ VALIDACIÓN: isValidRefFormat rechazó referencias legítimas de Git.');
+  }
+
+  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo mitigación F-02 CWE-78 y F-03 Scope Bypass) pasaron exitosamente.');
 }
 
 function checkCleanWorkingTree(allowDirty = false) {
-  const status = runGit('git status --porcelain');
+  const status = runGit(['status', '--porcelain']);
   if (status) {
     if (allowDirty) {
       console.warn('\n⚠️  ADVERTENCIA DE ÁRBOL DE TRABAJO: Existen cambios locales no confirmados (--allow-dirty activo):');
@@ -386,6 +430,11 @@ function checkCleanWorkingTree(allowDirty = false) {
       process.exit(1);
     }
   }
+}
+
+function isRootCommit(sha) {
+  const parents = runGit(['rev-list', '--parents', '-n', '1', sha]);
+  return parents ? parents.trim().split(/\s+/).length === 1 : false;
 }
 
 function main() {
@@ -403,18 +452,26 @@ function main() {
   const explicitBase = baseIdx !== -1 && args[baseIdx + 1] ? args[baseIdx + 1] : null;
   const explicitHead = headIdx !== -1 && args[headIdx + 1] ? args[headIdx + 1] : null;
 
-  // 1. Resolver HEAD
+  // 1. Resolver HEAD de forma segura
   const head = explicitHead || 'HEAD';
-  const headSha = runGitSafe(`git rev-parse --verify ${head}`);
+  if (!isValidRefFormat(head)) {
+    console.error(`❌ ERROR DE SEGURIDAD GIT: La referencia HEAD '${head}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).`);
+    process.exit(1);
+  }
+  const headSha = runGitSafe(['rev-parse', '--verify', head]);
   if (!headSha) {
     console.error(`❌ ERROR DE RESOLUCIÓN GIT: No se pudo resolver la referencia HEAD '${head}'. Verifique que esté dentro de un repositorio Git con commits.`);
     process.exit(1);
   }
 
-  // 2. Resolver BASE
+  // 2. Resolver BASE de forma segura
   let base = explicitBase;
   if (base) {
-    const baseSha = runGitSafe(`git rev-parse --verify ${base}`);
+    if (!isValidRefFormat(base)) {
+      console.error(`❌ ERROR DE SEGURIDAD GIT: La referencia base '${base}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).`);
+      process.exit(1);
+    }
+    const baseSha = runGitSafe(['rev-parse', '--verify', base]);
     if (!baseSha) {
       console.error(`❌ ERROR DE COMPUERTA: La referencia base especificada '${base}' no existe en el repositorio.`);
       console.error(`Si está ejecutando en local sin remotos configurados, ejecute 'node scripts/verify-gates.mjs --base <commit-o-rama>' o agregue el remote correspondiente.`);
@@ -424,7 +481,7 @@ function main() {
     // Si no se pasó --base, buscar candidatos válidos
     const candidates = ['origin/main', 'origin/master', 'main', 'master'];
     for (const cand of candidates) {
-      const sha = runGitSafe(`git rev-parse --verify ${cand}`);
+      const sha = runGitSafe(['rev-parse', '--verify', cand]);
       if (sha && sha !== headSha) {
         base = cand;
         break;
@@ -432,15 +489,22 @@ function main() {
     }
 
     if (!base) {
-      const prevSha = runGitSafe('git rev-parse --verify HEAD~1');
+      const prevSha = runGitSafe(['rev-parse', '--verify', 'HEAD~1']);
       if (prevSha) {
         base = 'HEAD~1';
         console.log(`[GATE-INFO] No se detectó remote origin/main. Usando fallback local seguro: base = HEAD~1`);
       } else {
-        // Es un repositorio de un solo commit inicial
+        // F-07: Manejo de repositorio en commit inicial / plantilla
+        const subject = runGitSafe(['log', '-1', '--format=%s', headSha]) || '';
+        const isTemplateSeed = /^(initial\s+commit|feat:\s*initial|chore:\s*initial|template:)/i.test(subject.trim());
+        if (isRootCommit(headSha) && isTemplateSeed) {
+          console.log(`[GATE-INFO] Commit raíz / semilla de template detectado (${headSha.slice(0, 7)}): '${subject.trim()}'.`);
+          console.log('✅ COMMIT INICIAL DEL TEMPLATE ACEPTADO COMO LÍNEA BASE VÁLIDA.');
+          process.exit(0);
+        }
+
         console.log(`[GATE-INFO] Repositorio en commit inicial (${headSha.slice(0, 7)}). Auditando el commit inicial...`);
-        const files = (runGitSafe(`git diff-tree --no-commit-id --name-only -r ${headSha}`) || '').split('\n').filter(Boolean);
-        const subject = runGitSafe(`git log -1 --format="%s" ${headSha}`) || '';
+        const files = (runGitSafe(['diff-tree', '--no-commit-id', '--name-only', '-r', headSha]) || '').split('\n').filter(Boolean);
         const errors = validateCommitList([{ hash: headSha, subject, changedFiles: files }]);
         if (errors.length > 0) {
           console.error('\n❌ VIOLACIONES DE COMPUERTA DETECTADAS EN COMMIT INICIAL:');
@@ -456,7 +520,7 @@ function main() {
   const revRange = `${base}..${head}`;
   let rawCommits;
   try {
-    rawCommits = runGitOrThrow(`git log --reverse --format="%H|%s" ${revRange}`, `Fallo al obtener commits en el rango '${revRange}'`);
+    rawCommits = runGitOrThrow(['log', '--reverse', '--format=%H|%s', revRange], `Fallo al obtener commits en el rango '${revRange}'`);
   } catch (err) {
     console.error(`❌ ERROR DE RESOLUCIÓN GIT:\n${err.message}`);
     process.exit(1);
@@ -469,7 +533,7 @@ function main() {
 
   const commits = rawCommits.split('\n').filter(Boolean).map((line) => {
     const [hash, subject] = line.split('|');
-    const files = (runGitSafe(`git diff-tree --no-commit-id --name-only -r ${hash}`) || '').split('\n').filter(Boolean);
+    const files = (runGitSafe(['diff-tree', '--no-commit-id', '--name-only', '-r', hash]) || '').split('\n').filter(Boolean);
     return { hash, subject, changedFiles: files };
   });
 

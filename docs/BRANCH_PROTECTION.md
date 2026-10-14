@@ -33,12 +33,13 @@ Para garantizar que ningún código de agente autónomo pueda fusionarse si viol
 
 En la configuración del repositorio en GitHub (`Settings` -> `Branches` -> `Branch protection rules` o `Rulesets`), los siguientes checks deben marcarse como **Required** en la rama `main`:
 
-| Job Name en GitHub Actions | Finalidad del Bloqueo |
+| Job / Rule en GitHub | Finalidad del Bloqueo |
 |---|---|
 | `Auditoría de Commits por Compuerta (Invariantes 1 y 3)` | Rechaza PRs si hay GREEN sin RED previo, contrabando multirruta o código en RED |
 | `Validación de Especificaciones OpenSpec` | Rechaza PRs si hay cambios de código sin spec aprobada o formato inválido |
 | `Suite TypeScript / Node.js & Cobertura` | Rechaza si fallan tests, se rompe @legacy-baseline o cobertura < 80% líneas / < 75% ramas |
 | `Suite Python & Cobertura` | Rechaza si fallan tests pytest, se rompe baseline o cobertura < 80% líneas / < 75% ramas |
+| `Require Pull Request Reviews` (≥1 review + CODEOWNERS) | Exige revisión humana obligatoria y aprobación de CODEOWNERS en compuertas y reglas |
 
 ---
 

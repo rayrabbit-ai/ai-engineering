@@ -131,7 +131,7 @@ All files      |   90.64 |    78.48 |   94.11 |   90.64 |
 ```bash
 npm run test:py:coverage
 # o directamente:
-pytest --cov=src --cov-fail-under=80 --cov-report=term-missing
+pytest --cov=src --cov-branch --cov-report=term-missing && python scripts/check_python_coverage.py
 ```
 Salida esperada:
 ```text

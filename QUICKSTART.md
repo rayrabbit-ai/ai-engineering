@@ -30,7 +30,7 @@ npm run test:ts:coverage
 ### If your stack is Python:
 ```bash
 pip install -e .[test]
-pytest --cov=src --cov-fail-under=80
+npm run test:py:coverage
 ```
 
 ---

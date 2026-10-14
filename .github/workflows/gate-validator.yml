@@ -6,6 +6,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   validate-gate-commits:
     name: "Auditoría de Commits por Compuerta (Invariantes 1 y 3)"
@@ -20,6 +23,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependencias bloqueadas
+        run: npm ci
 
       - name: Autochequeo de Reglas Adversariales y Causalidad (Self-Test)
         run: |
@@ -29,9 +36,33 @@ jobs:
         run: |
           node scripts/guard-agent.mjs
 
+      - name: Calcular rango de commits seguro (F-04)
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base=origin/${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "base=HEAD~1" >> $GITHUB_OUTPUT
+            else
+              echo "base=$BEFORE" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Auditoría de modificación de compuertas en PR (F-01)
+        if: github.event_name == 'pull_request'
+        run: |
+          MODIFIED_GATES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(\.github/workflows/|scripts/verify|scripts/guard|\.agent/rules/)' || true)
+          if [ -n "$MODIFIED_GATES" ]; then
+            echo "⚠️ [GATE-AUDIT] PR modifica compuertas o reglas críticas:"
+            echo "$MODIFIED_GATES"
+            echo "Requiere aprobación obligatoria de CODEOWNERS antes de merge."
+          fi
+
       - name: Validar Nomenclatura y Causalidad TDD (Node.js)
         run: |
-          node scripts/verify-gates.mjs --base origin/${{ github.base_ref || 'main' }} --head HEAD
+          node scripts/verify-gates.mjs --base "${{ steps.range.outputs.base }}" --head HEAD
 
   validate-openspec:
     name: "Validación de Especificaciones OpenSpec"
@@ -44,10 +75,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Validar Coherencia de Especificaciones
+      - name: Instalar dependencias bloqueadas
+        run: npm ci
+
+      - name: Validar Coherencia de Especificaciones con versión local bloqueada
         run: |
-          npx --yes @fission-ai/openspec validate --all
+          npm run spec:validate
 
   test-typescript:
     name: "Suite TypeScript / Node.js & Cobertura"
@@ -63,8 +98,8 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Instalar dependencias
-        run: npm ci || npm install
+      - name: Instalar dependencias bloqueadas (npm ci estricto)
+        run: npm ci
 
       - name: Legacy-Guard (Suite de Caracterización @legacy-baseline)
         run: npm run test:ts:baseline
@@ -95,14 +130,32 @@ jobs:
         run: |
           python scripts/verify_gates.py --self-test
 
+      - name: Calcular rango de commits seguro (F-04)
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base=origin/${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "base=HEAD~1" >> $GITHUB_OUTPUT
+            else
+              echo "base=$BEFORE" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       - name: Validar Nomenclatura y Causalidad TDD (Python History Audit)
         run: |
-          python scripts/verify_gates.py --base origin/${{ github.base_ref || 'main' }} --head HEAD
+          python scripts/verify_gates.py --base "${{ steps.range.outputs.base }}" --head HEAD
 
       - name: Legacy-Guard (Suite de Caracterización @legacy_baseline)
         run: |
           pytest -m legacy_baseline --tb=short
 
-      - name: Tests Unitarios e Integración con Cobertura Mínima (Líneas ≥80%, Ramas ≥75%)
+      - name: Tests Unitarios e Integración con Medición de Ramas
         run: |
-          pytest -m "unit or integration" --cov=src --cov-branch --cov-fail-under=80 --cov-report=term-missing
+          pytest -m "unit or integration" --cov=src --cov-branch --cov-report=term-missing
+
+      - name: Auditoría Mecánica de Cobertura Separada (Líneas ≥80%, Ramas ≥75% - F-09)
+        run: |
+          python scripts/check_python_coverage.py --min-lines 80 --min-branches 75

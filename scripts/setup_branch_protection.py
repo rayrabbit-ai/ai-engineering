@@ -4,7 +4,8 @@ setup_branch_protection.py - Configuración Automatizada de Branch Protection
 RayRabbit AI Engineering Standard
 
 Configura GitHub Branch Protection en la rama 'main' para hacer obligatorios
-los checks de CI del gate-validator, garantizando el bloqueo físico de merges.
+los checks de CI del gate-validator y requerir revisiones formales (DoD),
+garantizando el bloqueo físico e independiente de merges (F-05 mitigado).
 """
 
 import sys
@@ -36,12 +37,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Configurar GitHub Branch Protection para AI Engineering")
     parser.add_argument("--repo", default=None, help="Repositorio en formato owner/repo (ej. rayrabbit-ai/ai-engineering)")
     parser.add_argument("--branch", default="main", help="Rama a proteger (default: main)")
+    parser.add_argument("--reviews", type=int, default=1, help="Número de revisiones aprobatorias requeridas (default: 1)")
     args = parser.parse_args()
 
     repo = args.repo or get_default_repo()
     if not repo:
         print("❌ Error: No se pudo determinar el repositorio.")
-        print("Uso: python scripts/setup_branch_protection.py --repo <owner/repo> [--branch <branch>]")
+        print("Uso: python scripts/setup_branch_protection.py --repo <owner/repo> [--branch <branch>] [--reviews <N>]")
         return 1
 
     payload = {
@@ -50,7 +52,11 @@ def main() -> int:
             "contexts": REQUIRED_CHECKS
         },
         "enforce_admins": True,
-        "required_pull_request_reviews": None,
+        "required_pull_request_reviews": {
+            "dismiss_stale_reviews": True,
+            "require_code_owner_reviews": True,
+            "required_approving_review_count": args.reviews
+        },
         "restrictions": None,
         "required_linear_history": True,
         "allow_force_pushes": False,
@@ -58,7 +64,7 @@ def main() -> int:
     }
 
     print(f"🔒 Configurando Branch Protection en https://github.com/{repo} (rama: {args.branch})...")
-    payload_json = json.dumps(payload)
+    payload_json = json.dumps(payload, indent=2)
 
     try:
         proc = subprocess.run(
@@ -78,9 +84,12 @@ def main() -> int:
             return proc.returncode
 
         print("✅ Branch Protection configurada exitosamente.")
-        print("Status checks requeridos obligatorios:")
+        print("Reglas activas de protección:")
+        print(f"  - Revisiones obligatorias requeridas: {args.reviews} (con Code Owners y descarte de stale)")
+        print("  - Historial lineal obligatorio (no merge commits desordenados)")
+        print("  - Status checks de CI bloqueantes:")
         for chk in REQUIRED_CHECKS:
-            print(f"  - {chk}")
+            print(f"    * {chk}")
         return 0
     except FileNotFoundError:
         print("❌ Error: GitHub CLI ('gh') no está instalado en este sistema.")

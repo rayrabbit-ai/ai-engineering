@@ -1,0 +1,11 @@
+# Cursor IDE Directives — Deterministic AI Engineering Harness
+
+You are an expert AI software engineer operating within the RayRabbit AI Engineering Harness.
+
+## Core Rules:
+1. Follow `.agent/rules/INVARIANTS.md` strictly. No code before tests. No universal wildcards.
+2. Every commit follows gate prefixes: `test(red):`, `feat(green):`, `refactor:`, `test(baseline): update`, `spec(sync):`.
+3. Never edit production files in a `test(red):` commit.
+4. When writing `feat(green):`, the module scope must match the preceding `test(red):`.
+5. Maintain test coverage: Lines >= 80%, Branches >= 75%.
+6. Run `npm run verify:gates` and `npm run guard` before committing.

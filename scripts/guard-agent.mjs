@@ -4,7 +4,8 @@
  * RayRabbit AI Engineering Standard
  * 
  * Previene que la instalación o actualización de OpenSpec ('openspec init', 'openspec update')
- * elimine o degrade las reglas del agente, workflows deterministas o skills TDD.
+ * o PRs adversariales eliminen, vacíen o degraden las reglas del agente, workflows deterministas o skills TDD.
+ * Valida presencia, tamaño mínimo y anclajes semánticos obligatorios (F-01 mitigado).
  */
 
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
@@ -30,13 +31,13 @@ const REQUIRED_WORKFLOWS = [
 ];
 
 const REQUIRED_RULES = [
-  'INVARIANTS.md',
-  'SDD_GATE.md',
-  'AGENTS.md',
-  'ADVERSARIAL_AUDITOR.md',
+  { file: 'INVARIANTS.md', anchors: ['15 invariants', 'Commit per Gate', 'Invariante 1', '15 Leyes Universales'] },
+  { file: 'SDD_GATE.md', anchors: ['OpenSpec', 'SDD', 'Spec-Driven'] },
+  { file: 'AGENTS.md', anchors: ['RayRabbit', 'DNA', 'AI Coding Agents'] },
+  { file: 'ADVERSARIAL_AUDITOR.md', anchors: ['Adversarial', 'Auditor'] },
 ];
 
-console.log('[GUARD-AGENT] Verificando integridad de contratos y workflows de AI Engineering...');
+console.log('[GUARD-AGENT] Verificando integridad física, estructural y semántica de contratos AI Engineering...');
 
 let errors = 0;
 
@@ -48,28 +49,50 @@ let errors = 0;
   }
 });
 
-// 2. Verificar reglas fundamentales
-REQUIRED_RULES.forEach((ruleFile) => {
-  const target = path.join(RULES_DIR, ruleFile);
+// 2. Verificar reglas fundamentales (existencia, contenido no vacío y firmas canónicas)
+REQUIRED_RULES.forEach(({ file, anchors }) => {
+  const target = path.join(RULES_DIR, file);
   if (!existsSync(target)) {
-    console.error(`[GUARD-AGENT] ❌ Regla obligatoria faltante: ${ruleFile}`);
+    console.error(`[GUARD-AGENT] ❌ Regla obligatoria faltante: ${file}`);
+    errors++;
+    return;
+  }
+
+  const content = readFileSync(target, 'utf-8');
+  if (content.trim().length < 50) {
+    console.error(`[GUARD-AGENT] ❌ Regla vaciada o degradada (longitud insuficiente): ${file}`);
+    errors++;
+    return;
+  }
+
+  const hasAnchor = anchors.some((anchor) => content.includes(anchor));
+  if (!hasAnchor) {
+    console.error(`[GUARD-AGENT] ❌ Firma semántica canónica ausente en ${file}. Se esperaba al menos uno de: [${anchors.join(', ')}]`);
     errors++;
   }
 });
 
-// 3. Verificar workflows y preservar cabeceras estandarizadas
+// 3. Verificar workflows deterministas y longitud mínima
 REQUIRED_WORKFLOWS.forEach((wfFile) => {
   const target = path.join(WORKFLOWS_DIR, wfFile);
   if (!existsSync(target)) {
     console.error(`[GUARD-AGENT] ❌ Workflow determinista faltante: ${wfFile}`);
     errors++;
+    return;
+  }
+
+  const content = readFileSync(target, 'utf-8');
+  if (content.trim().length < 30) {
+    console.error(`[GUARD-AGENT] ❌ Workflow degradado o vacío: ${wfFile}`);
+    errors++;
   }
 });
 
 if (errors > 0) {
-  console.error(`[GUARD-AGENT] ❌ Se detectaron ${errors} anomalías en los contratos de AI Engineering.`);
+  console.error(`\n[GUARD-AGENT] ❌ Se detectaron ${errors} anomalías en los contratos de AI Engineering.`);
+  console.error('Abortando para prevenir debilitamiento del arnés de ingeniería.');
   process.exit(1);
 }
 
-console.log('[GUARD-AGENT] ✅ Todos los contratos, invariantes y workflows están protegidos e intactos.');
+console.log('[GUARD-AGENT] ✅ Todos los contratos, invariantes, firmas y workflows están protegidos e intactos.');
 process.exit(0);

@@ -41,16 +41,25 @@ def has_syntax_or_collection_error(output: str) -> bool:
         r"ERROR collecting",
         r"Cannot find module",
         r"ERR_MODULE_NOT_FOUND",
+        r"TypeError",
+        r"ReferenceError",
+        r"NameError",
+        r"AttributeError",
     ]
     return any(re.search(pat, output, re.IGNORECASE) for pat in forbidden)
 
 def has_legitimate_assertion_failure(output: str) -> bool:
+    # 1. Prohibir errores genéricos de excepción (ej. raise RuntimeError, raise ValueError) que no son aserciones
+    if re.search(r"(RuntimeError|ValueError|KeyError|IndexError|Exception):", output) and not re.search(r"AssertionError", output):
+        return False
+
     patterns = [
         r"AssertionError",
-        r"FAILED",
-        r"assert ",
+        r"assert\s+",
+        r"assert\(",
         r"Assertion failed",
-        r"expected .* to",
+        r"expected\s+.+\s+to\b",
+        r"Expected:.+Received:",
     ]
     return any(re.search(pat, output, re.IGNORECASE) for pat in patterns)
 

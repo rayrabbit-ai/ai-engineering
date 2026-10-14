@@ -39,18 +39,29 @@ function hasSyntaxOrCollectionError(output) {
     /ParseError/i,
     /Failed to resolve import/i,
     /ERROR collecting/i,
+    /TypeError/i,
+    /ReferenceError/i,
+    /Unhandled Error/i,
+    /Unhandled rejection/i,
   ];
   return forbiddenPatterns.some((pattern) => pattern.test(output));
 }
 
 function hasLegitimateAssertionFailure(output) {
+  // 1. Prohibir errores genéricos de runtime (ej. throw new Error('setup fail')) que no son aserciones
+  if (/(?:Uncaught\s+)?Error:\s+(?!.*Assertion)/i.test(output) && !/AssertionError/i.test(output) && !/expected\s+.+\s+to/i.test(output)) {
+    return false;
+  }
+
+  // 2. Patrones específicos de fallo de aserción (Vitest/Chai/Jest/Node:assert)
   const assertionPatterns = [
     /AssertionError/i,
     /Assertion failed/i,
-    /expected .* to/i,
-    /FAIL/i,
-    /FAILED/i,
-    /assert /i,
+    /expected\s+.+\s+to\b/i,
+    /Expected:.+Received:/is,
+    /expect\(.+?\)\./i,
+    /\bassert\b\(/i,
+    /\bassert\.[a-zA-Z]/i,
   ];
   return assertionPatterns.some((pattern) => pattern.test(output));
 }

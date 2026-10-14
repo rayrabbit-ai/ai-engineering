@@ -82,7 +82,7 @@ Any coding agent operating in this repository must strictly adhere to the rules 
 * **Automated CI & Commit Gates** (Mechanically verified on every PR and commit):
   1. **Commit per Gate & Scope Coupling**: Atomic independent commits (`RED`, `GREEN`, `REFACTOR`, `BASELINE`, `FIX`). Every production file modified in `feat(green)` must be coupled to an active `test(red)` scope. Universal wildcards are strictly rejected.
   2. **Immutable Baseline**: Tests tagged `@legacy-baseline` are never modified without explicit `test(baseline): update`.
-  3. **Isolation & Test Mandatory in RED**: Production files are strictly forbidden in `test(red)`, and at least one real test file must be changed.
+  3. **Isolation & Test Mandatory in RED**: Production files are strictly forbidden in `test(red)`, and at least one real test file must be changed (local verification via `npm run verify:red`).
   4. **Coverage per Phase**: Lines ≥ 80%, Branches ≥ 75% mechanically checked in CI independently for TS and Python.
   6. **Continuous Legacy-Guard**: Characterization suite must remain 100% green on every step.
   - **OpenSpec Spec Immutability**: Direct tampering with consolidated `openspec/specs/` is blocked.
@@ -97,7 +97,7 @@ Any coding agent operating in this repository must strictly adhere to the rules 
   12. **Suite Separation by Markers**: `unit`, `integration`, `legacy-baseline`, `e2e`.
   13. **Zero Warning Tolerance on Archive**: Incomplete artifacts or pending tasks strictly block archiving.
   14. **Pre-Code Contract Gate**: API or security changes require approved spec deltas before touching code.
-  15. **Real Runtime E2E Gate & HITL**: Maximum 3 automated fix attempts before mandatory human escalation.
+  15. **Real Runtime E2E Gate & HITL**: Real runtime test execution in CI (`pytest -m e2e`); retry limits (max 3 retries) and human escalation operate as agent workflow policy.
 
 ---
 

@@ -19,8 +19,8 @@ from pathlib import Path
 # Soporte seguro de codificación en Windows y UTF-8
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
 
@@ -54,9 +54,27 @@ def main() -> int:
 
     totals = cov_data.get("totals", {})
     statements = totals.get("num_statements", 0)
+    covered_lines = totals.get("covered_lines", 0)
     branches = totals.get("num_branches", 0)
-    line_cov = totals.get("percent_statements_covered", totals.get("percent_covered", 100.0 if statements == 0 else 0.0))
-    branch_cov = totals.get("percent_branches_covered", 100.0 if branches == 0 else 0.0)
+    covered_branches = totals.get("covered_branches", 0)
+
+    # 1. Calcular Cobertura de Líneas (Statements)
+    if "percent_statements_covered" in totals and totals["percent_statements_covered"] is not None:
+        line_cov = float(totals["percent_statements_covered"])
+    elif statements > 0:
+        line_cov = (covered_lines / statements) * 100.0
+    elif "percent_covered" in totals and totals["percent_covered"] is not None:
+        line_cov = float(totals["percent_covered"])
+    else:
+        line_cov = 100.0 if statements == 0 else 0.0
+
+    # 2. Calcular Cobertura de Ramas (Branches) - F-09 robusto contra variaciones de coverage.py
+    if "percent_branches_covered" in totals and totals["percent_branches_covered"] is not None:
+        branch_cov = float(totals["percent_branches_covered"])
+    elif branches > 0:
+        branch_cov = (covered_branches / branches) * 100.0
+    else:
+        branch_cov = 100.0 if branches == 0 else 0.0
 
     print("\n" + "=" * 60)
     print("AUDITORÍA MECÁNICA DE COBERTURA PYTHON (F-09)")

@@ -4,14 +4,14 @@
 # ==============================================================================
 
 # Protect CI/CD workflows and automated commit gates
-.github/workflows/ @rayrabbit-ai/maintainers dev@rayrabbit.site
+.github/workflows/ @rayrabbit-ai
 
 # Protect verification scripts and security guards
-scripts/ @rayrabbit-ai/maintainers dev@rayrabbit.site
+scripts/ @rayrabbit-ai
 
 # Protect deterministic engineering rules and agent invariants
-.agent/rules/ @rayrabbit-ai/maintainers dev@rayrabbit.site
-.agent/workflows/ @rayrabbit-ai/maintainers dev@rayrabbit.site
+.agent/rules/ @rayrabbit-ai
+.agent/workflows/ @rayrabbit-ai
 
 # Protect specification governance
-openspec/specs/ @rayrabbit-ai/maintainers dev@rayrabbit.site
+openspec/specs/ @rayrabbit-ai

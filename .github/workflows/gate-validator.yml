@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repositorio con historial completo
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
+      - name: Configurar Node.js (v20 LTS)
+        uses: actions/setup-node@60edb5dd545a775178f525247833795be8391ab8 # v4.0.2
         with:
           node-version: "20"
           cache: "npm"
@@ -50,14 +50,15 @@ jobs:
             fi
           fi
 
-      - name: Auditoría de modificación de compuertas en PR (F-01)
-        if: github.event_name == 'pull_request'
+      - name: Bloqueo de alteración no autorizada de compuertas en PR (F-01)
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'allow-gate-update')
         run: |
           MODIFIED_GATES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(\.github/workflows/|scripts/verify|scripts/guard|\.agent/rules/)' || true)
           if [ -n "$MODIFIED_GATES" ]; then
-            echo "⚠️ [GATE-AUDIT] PR modifica compuertas o reglas críticas:"
+            echo "❌ [GATE-SECURITY-FAIL] El PR modifica compuertas, reglas o workflows críticos:"
             echo "$MODIFIED_GATES"
-            echo "Requiere aprobación obligatoria de CODEOWNERS antes de merge."
+            echo "Para modificar contratos centrales, un maintainer debe etiquetar el PR con 'allow-gate-update'."
+            exit 1
           fi
 
       - name: Validar Nomenclatura y Causalidad TDD (Node.js)
@@ -69,10 +70,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@60edb5dd545a775178f525247833795be8391ab8 # v4.0.2
         with:
           node-version: "20"
           cache: "npm"
@@ -90,10 +91,10 @@ jobs:
     if: hashFiles('package.json') != ''
     steps:
       - name: Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@60edb5dd545a775178f525247833795be8391ab8 # v4.0.2
         with:
           node-version: "20"
           cache: "npm"
@@ -113,18 +114,20 @@ jobs:
     if: hashFiles('pyproject.toml') != ''
     steps:
       - name: Checkout repositorio con historial completo
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
 
       - name: Configurar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      - name: Instalar dependencias
+      - name: Instalar dependencias con lockfile reproducible
         run: |
-          pip install -e .[test]
+          pip install -r requirements-test.txt
+          pip install --no-deps -e .
 
       - name: Autochequeo de Compuertas Adversariales (Python Self-Test)
         run: |
@@ -159,3 +162,7 @@ jobs:
       - name: Auditoría Mecánica de Cobertura Separada (Líneas ≥80%, Ramas ≥75% - F-09)
         run: |
           python scripts/check_python_coverage.py --min-lines 80 --min-branches 75
+
+      - name: Gate E2E en Runtime Real (Invariante 15)
+        run: |
+          pytest -m e2e --tb=short

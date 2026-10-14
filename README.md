@@ -23,11 +23,11 @@ Unconstrained usage of AI coding assistants ("vibe coding") produces:
 ### The Solution: Deterministic AI Engineering
 This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Driven Development (TDD)** and **CI-Enforced Causal Git Commit Gates**:
 1. **Zero code without prior approved specification** (`openspec/specs/`).
-2. **Zero production code without a verified failing test (`test(red)`) in the terminal with scope/module coupling and strict isolation (production files strictly forbidden in `test(red)`)**.
-3. **Zero Pull Requests accepted if they violate the 15 Invariants, TDD causality, or consolidated spec immutability**.
+2. **Zero production code without a verified failing test (`test(red)`) in the terminal with scope/module coupling and strict isolation** (production files strictly forbidden and test files mandatory in `test(red)`).
+3. **Physical merge blocking in CI via Branch Protection**: Pull Requests cannot be merged if they violate TDD commit causality, baseline immutability, or coverage thresholds (see [`docs/BRANCH_PROTECTION.md`](docs/BRANCH_PROTECTION.md)).
 4. **Built-in Adversarial Audit & Guard**: Pre-push and CI enforcement via [`guard-agent`](scripts/guard-agent.mjs), [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md), and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
-> 🔬 **Empirical Evidence**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) proving how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
+> 🔬 **Empirical Evidence**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -66,7 +66,7 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
  [ P8. CLOSE & ARCHIVE ]
     │ (Sync Specs + Archive Change)
     ▼
-  GitHub PR (Audited by .github/workflows/gate-validator.yml)
+  GitHub PR (Physically enforced via .github/workflows/gate-validator.yml + Branch Protection)
 ```
 
 ---
@@ -75,33 +75,35 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
 
 Any coding agent operating in this repository must strictly adhere to the rules codified in [`.agent/rules/INVARIANTS.md`](.agent/rules/INVARIANTS.md):
 
-1. **Commit per Gate**: Atomic independent commits (`RED`, `GREEN`, `REFACTOR`, `BASELINE`, `FIX`).
-2. **Immutable Baseline**: Tests tagged `@legacy-baseline` are never modified to justify new code.
-3. **All Bugs Enter via RED**: Mandatory regression test demonstrating legitimate failure in terminal before modifying production code.
-4. **Coverage per Phase**: Lines ≥ 80%, Branches ≥ 75%, Critical paths 100%.
-5. **Mandatory Refactoring Triggers**: Complexity > 10, Method > 20 lines, Class > 200 lines, Duplication > 3 lines.
-6. **Continuous Legacy-Guard**: The characterization suite must remain 100% green after every step.
-7. **Formal DoD Gate**: Closed changes require completed phases 1 to 6, green suites, and synced specs.
-8. **Hard Anti-Pattern Prohibitions**: Zero code before tests, zero assertion relaxation, zero ignored test failures.
-9. **Incremental Mode by Default**: Step-by-step progress (`--incremental`) when facing legacy or uncertainty.
-10. **Deterministic Failure Recovery**: Immediate STOP upon invariant violation, rollback to the last valid gate commit.
-11. **Config Precedence over Refactor**: Architectural wire invariants and path conventions take precedence over cosmetic refactoring.
-12. **Suite Separation by Markers**: `unit`, `integration`, `legacy-baseline`, `e2e`.
-13. **Zero Warning Tolerance on Archive**: Incomplete artifacts or pending tasks strictly block archiving.
-14. **Pre-Code Contract Gate**: API or security changes require approved spec deltas before touching code.
-15. **Real Runtime E2E Gate & HITL**: Maximum 3 automated fix attempts before mandatory human escalation.
+* **Automated CI & Commit Gates** (Mechanically verified on every PR and commit):
+  1. **Commit per Gate & Scope Coupling**: Atomic independent commits (`RED`, `GREEN`, `REFACTOR`, `BASELINE`, `FIX`). Every production file modified in `feat(green)` must be coupled to an active `test(red)` scope.
+  2. **Immutable Baseline**: Tests tagged `@legacy-baseline` are never modified without explicit `test(baseline): update`.
+  3. **Isolation & Test Mandatory in RED**: Production files are strictly forbidden in `test(red)`, and at least one real test file must be changed.
+  4. **Coverage per Phase**: Lines ≥ 80%, Branches ≥ 75% mechanically checked in CI for TS and Python.
+  6. **Continuous Legacy-Guard**: Characterization suite must remain 100% green on every step.
+  - **OpenSpec Spec Immutability**: Direct tampering with consolidated `openspec/specs/` is blocked.
+
+* **Autonomous Agent Playbook & Protocol** (Enforced by Agent DNA & workflows):
+  5. **Mandatory Refactoring Triggers**: Complexity > 10, Method > 20 lines, Class > 200 lines, Duplication > 3 lines.
+  7. **Formal DoD Gate**: Closed changes require completed phases 1 to 6, green suites, and synced specs.
+  8. **Hard Anti-Pattern Prohibitions**: Zero code before tests, zero assertion relaxation, zero ignored test failures.
+  9. **Incremental Mode by Default**: Step-by-step progress (`--incremental`) when facing legacy or uncertainty.
+  10. **Deterministic Failure Recovery**: Immediate STOP upon invariant violation, rollback to the last valid gate commit.
+  11. **Config Precedence over Refactor**: Architectural wire invariants take precedence over cosmetic refactoring.
+  12. **Suite Separation by Markers**: `unit`, `integration`, `legacy-baseline`, `e2e`.
+  13. **Zero Warning Tolerance on Archive**: Incomplete artifacts or pending tasks strictly block archiving.
+  14. **Pre-Code Contract Gate**: API or security changes require approved spec deltas before touching code.
+  15. **Real Runtime E2E Gate & HITL**: Maximum 3 automated fix attempts before mandatory human escalation.
 
 ---
 
 ## 3. Supported Stacks
 
-This template is **100% polyglot and agnostic**:
-
-| Stack | Testing Engine | Coverage Provider | Gate Validator |
+| Stack | Testing Engine | Coverage Provider | CI Enforcement Status |
 |---|---|---|---|
-| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (Lines ≥80%, Branches ≥75%) | `node scripts/verify-gates.mjs` |
-| **Python** | Pytest (`tests/`) | `pytest-cov` (Lines ≥80%, Branches ≥75%) | `python scripts/verify_gates.py` |
-| **Others (Go, Rust, Java)** | Native with tags | Standard toolchain | `node scripts/verify-gates.mjs` (agnostic) |
+| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (Lines ≥80%, Branches ≥75%) | Full CI suite + commit gate validator (`verify-gates.mjs`) |
+| **Python** | Pytest (`tests/`) | `pytest-cov` (Lines ≥80%, Branches ≥75%) | Full CI suite + commit gate validator (`verify_gates.py`) |
+| **Others (Go, Rust, Java)** | Native runners | Standard toolchain | Commit gates validator is polyglot; plug in your test runner in CI |
 
 ---
 
@@ -156,6 +158,7 @@ npm run test:py:coverage     # Python
 ---
 
 ## 6. Additional Documentation
+* [GitHub Branch Protection & Physical Merge Blocking](./docs/BRANCH_PROTECTION.md)
 * [Empirical A/B Benchmark Case Study & Coverage Guide](./docs/ab-testing-and-coverage.md)
 * [Operational Manual and Prompt Sequences (P0 - P11)](./OPERATIONAL_MANUAL.md)
 * [The 15 Universal Invariants](.agent/rules/INVARIANTS.md)

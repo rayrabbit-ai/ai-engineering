@@ -20,14 +20,14 @@ El uso descontrolado de asistentes de IA para generar software ("vibe coding") p
 * **Falsos Positivos ("Fake Greens")**: El modelo escribe pruebas triviales o relaja las aserciones para que pasen a la primera.
 * **Rotura de Código Legacy**: Modificar código existente sin una red de seguridad inmutable rompe funcionalidades históricas.
 
-### La Solución: AI Engineering Determinista
+#### La Solución: AI Engineering Determinista
 Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven Development (TDD) Estricto** y **Compuertas Causales Deterministas en Git CI/CD**:
 1. **Ningún código sin especificación previa** (`openspec/specs/`).
-2. **Ningún código de producción sin un test en rojo (`test(red)`) previo verificado en terminal con acoplamiento de ámbito/módulo y aislamiento estricto (código de producción estrictamente prohibido en `test(red)`)**.
-3. **Ningún Pull Request es aceptado si viola las 15 Invariantes, la causalidad TDD o la inmutabilidad de especificaciones consolidadas**.
+2. **Ningún código de producción sin un test en rojo (`test(red)`) previo verificado en terminal con acoplamiento de ámbito/módulo y aislamiento estricto** (código de producción estrictamente prohibido y archivos de test obligatorios en `test(red)`).
+3. **Bloqueo físico de merges en CI mediante Branch Protection**: Ningún Pull Request puede fusionarse si viola la causalidad TDD, la inmutabilidad de baselines o los umbrales de cobertura (ver [`docs/BRANCH_PROTECTION.md`](docs/BRANCH_PROTECTION.md)).
 4. **Auditoría Adversarial y Guard Integrados**: Validación pre-push y en CI mediante [`guard-agent`](scripts/guard-agent.mjs), el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
-> 🔬 **Evidencia Empírica**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde demostramos cómo un agente cae en *"La Ilusión de TDD"* y es bloqueado por el validador de CI.
+> 🔬 **Evidencia Empírica**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde documentamos cómo un agente cae en *"La Ilusión de TDD"* y es bloqueado por el validador de CI.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -66,7 +66,7 @@ Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven D
  [ P8. CIERRE & ARCHIVE ]
     │ (Sync de Specs + Archive del Change)
     ▼
-  GitHub PR (Auditado por .github/workflows/gate-validator.yml)
+  GitHub PR (Bloqueo físico por .github/workflows/gate-validator.yml + Branch Protection)
 ```
 
 ---
@@ -75,33 +75,35 @@ Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven D
 
 Cualquier agente que opere en este repositorio obedece obligatoriamente el decálogo definido en [`.agent/rules/INVARIANTS.md`](.agent/rules/INVARIANTS.md):
 
-1. **Commit por Compuerta**: Commits atómicos independientes (`RED`, `GREEN`, `REFACTOR`, `BASELINE`, `FIX`).
-2. **Baseline Inmutable**: Los tests `@legacy-baseline` jamás se modifican para justificar código nuevo.
-3. **Todo Bug entra por RED**: Test de regresión obligatorio primero con fallo demostrado en terminal.
-4. **Cobertura por Fase**: Líneas ≥ 80%, Ramas ≥ 75%, Rutas críticas 100%.
-5. **Triggers de Refactor Obligatorios**: Complejidad > 10, Función > 20 líneas, Clase > 200 líneas, Duplicación > 3 líneas.
-6. **Legacy-Guard Continuo**: La suite de caracterización debe permanecer 100% verde tras cada cambio.
-7. **Cierre Formal DoD**: Prohibido archivar sin suites verdes, cobertura cumplida y sync de specs.
-8. **Prohibiciones Duras**: Cero código antes de tests, cero modificación de aserciones para pasar.
-9. **Modo Incremental por Defecto**: Avance paso a paso (`--incremental`) ante incertidumbre o legacy.
-10. **Failure Recovery**: Parada inmediata ante desvíos y rollback al último commit de compuerta.
-11. **Precedencia de Configuración**: Las invariantes de arquitectura y transporte priman sobre refactors estéticos.
-12. **Separación de Suites por Marcadores**: `unit`, `integration`, `legacy-baseline`, `e2e`.
-13. **Cero Tolerancia a Advertencias**: Prohibido archivar con tareas o artefactos incompletos.
-14. **Compuerta Pre-Código para Contratos**: Cambios en APIs o seguridad requieren spec previa aprobada.
-15. **Gate E2E en Runtime Real & HITL**: Máximo 3 reintentos automáticos antes de intervención humana.
+* **Compuertas de CI y Commits Mecanizadas** (Verificadas físicamente en cada PR y commit):
+  1. **Commit por Compuerta y Acoplamiento de Ámbito**: Commits atómicos independientes (`RED`, `GREEN`, `REFACTOR`, `BASELINE`, `FIX`). Cada archivo de producción modificado en `feat(green)` debe estar acoplado a un ámbito activo de `test(red)`.
+  2. **Baseline Inmutable**: Los tests `@legacy-baseline` jamás se modifican sin la convención explícita `test(baseline): update`.
+  3. **Aislamiento y Test Obligatorio en RED**: Archivos de producción estrictamente prohibidos en `test(red)` y requisito de al menos un archivo de test real.
+  4. **Cobertura por Fase**: Líneas ≥ 80%, Ramas ≥ 75% auditadas mecánicamente en CI para TS y Python.
+  6. **Legacy-Guard Continuo**: La suite de caracterización permanece verde en cada paso.
+  - **Inmutabilidad de Especificaciones OpenSpec**: Se bloquea la alteración directa de `openspec/specs/` consolidado.
+
+* **Protocolo Operativo y Playbook del Agente** (Gobernado por el DNA del agente y workflows):
+  5. **Triggers de Refactor Obligatorios**: Complejidad > 10, Función > 20 líneas, Clase > 200 líneas, Duplicación > 3 líneas.
+  7. **Cierre Formal DoD**: Prohibido archivar sin suites verdes, cobertura cumplida y sync de specs.
+  8. **Prohibiciones Duras**: Cero código antes de tests, cero modificación de aserciones para pasar.
+  9. **Modo Incremental por Defecto**: Avance paso a paso (`--incremental`) ante incertidumbre o legacy.
+  10. **Failure Recovery**: Parada inmediata ante desvíos y rollback al último commit de compuerta.
+  11. **Precedencia de Configuración**: Las invariantes de arquitectura y transporte priman sobre refactors estéticos.
+  12. **Separación de Suites por Marcadores**: `unit`, `integration`, `legacy-baseline`, `e2e`.
+  13. **Cero Tolerancia a Advertencias**: Prohibido archivar con tareas o artefactos incompletos.
+  14. **Compuerta Pre-Código para Contratos**: Cambios en APIs o seguridad requieren spec previa aprobada.
+  15. **Gate E2E en Runtime Real & HITL**: Máximo 3 reintentos automáticos antes de intervención humana obligatoria.
 
 ---
 
 ## 3. Stacks Soportados Fuera de la Caja
 
-Este template es **100% políglota y agnóstico**:
-
-| Stack | Framework de Pruebas | Cobertura | Validador de Compuertas |
+| Stack | Framework de Pruebas | Cobertura | Estado de Integración en CI |
 |---|---|---|---|
-| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (Líneas ≥80%, Ramas ≥75%) | `node scripts/verify-gates.mjs` |
-| **Python** | Pytest (`tests/`) | `pytest-cov` (Líneas ≥80%, Ramas ≥75%) | `python scripts/verify_gates.py` |
-| **Otros (Go, Rust, Java)** | Nativo con tags | Herramienta estándar | `node scripts/verify-gates.mjs` (agnóstico) |
+| **TypeScript / Node.js** | Vitest (`tests/ts/`) | `@vitest/coverage-v8` (Líneas ≥80%, Ramas ≥75%) | Suite completa de CI + validador de compuertas (`verify-gates.mjs`) |
+| **Python** | Pytest (`tests/`) | `pytest-cov` (Líneas ≥80%, Ramas ≥75%) | Suite completa de CI + validador de compuertas (`verify_gates.py`) |
+| **Otros (Go, Rust, Java)** | Runners nativos | Herramienta estándar | Validador de compuertas políglota; conecte su runner en CI |
 
 ---
 
@@ -156,6 +158,7 @@ npm run test:py:coverage     # Para Python
 ---
 
 ## 6. Documentación Adicional
+* [Protección de Ramas en GitHub y Bloqueo Físico de Merges](./docs/BRANCH_PROTECTION.md)
 * [Caso de Estudio Empírico: Benchmark A/B y Cobertura](./docs/ab-testing-and-coverage.es.md)
 * [Manual Operativo y Runbook de Prompts (P0 - P11)](./MANUAL_OPERATIVO.es.md)
 * [Las 15 Invariantes TDD+SDD](.agent/rules/INVARIANTS.md)

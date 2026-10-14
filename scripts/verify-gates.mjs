@@ -45,15 +45,28 @@ export const LEGACY_BASELINE_PATTERNS = [
   /baseline\//i,
 ];
 
+export function isTestFile(filePath) {
+  if (!filePath) return false;
+  const norm = filePath.replace(/\\/g, '/').toLowerCase();
+  if (norm.startsWith('tests/') || norm.startsWith('test/') || norm.includes('/tests/') || norm.includes('/test/')) return true;
+  if (/(\.spec|\.test|_test)\.[a-z0-9]+$/i.test(norm)) return true;
+  if (/test_[a-z0-9_-]+\.[a-z0-9]+$/i.test(norm)) return true;
+  return false;
+}
+
 export function isProductionFile(filePath) {
   if (!filePath) return false;
   const norm = filePath.replace(/\\/g, '/').toLowerCase();
-  // Excluir directorios de pruebas, specs, documentación, scripts y configuración
-  if (norm.startsWith('tests/') || norm.startsWith('test/') || norm.includes('/tests/') || norm.includes('/test/')) return false;
-  if (norm.startsWith('openspec/') || norm.startsWith('docs/') || norm.startsWith('scripts/') || norm.startsWith('.agent/') || norm.startsWith('.github/')) return false;
-  if (norm.endsWith('.md') || norm.endsWith('.json') || norm.endsWith('.yaml') || norm.endsWith('.yml') || norm.endsWith('.toml')) return false;
-  // Todo archivo bajo src/ o lib/ se considera código de producción
-  if (norm.startsWith('src/') || norm.includes('/src/') || norm.startsWith('lib/') || norm.includes('/lib/')) return true;
+  // Un archivo de test jamás es código de producción
+  if (isTestFile(norm)) return false;
+  // Excluir specs, documentación, scripts de soporte, dotfiles y configs
+  if (norm.startsWith('openspec/') || norm.startsWith('docs/') || norm.startsWith('scripts/') || norm.startsWith('.agent/') || norm.startsWith('.github/') || norm.startsWith('.git/')) return false;
+  if (norm.endsWith('.md') || norm.endsWith('.json') || norm.endsWith('.yaml') || norm.endsWith('.yml') || norm.endsWith('.toml') || norm.endsWith('.txt') || norm.endsWith('.lock') || norm.endsWith('.ini')) return false;
+  if (norm === '.gitignore' || norm.endsWith('/.gitignore') || norm === 'license' || norm.endsWith('/license')) return false;
+  // Todo archivo bajo src/, lib/, app/, pkg/
+  if (norm.startsWith('src/') || norm.includes('/src/') || norm.startsWith('lib/') || norm.includes('/lib/') || norm.startsWith('app/') || norm.includes('/app/')) return true;
+  // Archivo de código fuente ejecutable fuera de directorios excluidos
+  if (/\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$/i.test(norm)) return true;
   return false;
 }
 
@@ -79,6 +92,23 @@ function runGit(cmd) {
     return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
   } catch {
     return '';
+  }
+}
+
+function runGitSafe(cmd) {
+  try {
+    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function runGitOrThrow(cmd, errorMsg) {
+  try {
+    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  } catch (err) {
+    const stderr = err.stderr ? err.stderr.toString().trim() : '';
+    throw new Error(`${errorMsg}: ${stderr || err.message}`);
   }
 }
 
@@ -108,11 +138,21 @@ export function validateCommitList(commits) {
         );
       }
 
+      // Invariante 1 & 3: Un commit test(red) DEBE incluir al menos un archivo de test real
+      const testFiles = changedFiles.filter(isTestFile);
+      if (testFiles.length === 0) {
+        errors.push(
+          `[${shortHash}] Violación de Invariante 1 en '${trimmedSubject}': Un commit 'test(red):' DEBE modificar al menos un archivo de test (detectado: 0 archivos de prueba en [${changedFiles.join(', ')}]).`
+        );
+      }
+
       const explicitScope = extractScopeFromSubject(trimmedSubject, 'test\\(red\\)');
+      const fileScopes = testFiles.map(extractModuleName).filter(Boolean);
+
       if (explicitScope) {
         activeRedScopes.add(explicitScope);
+        fileScopes.forEach((s) => activeRedScopes.add(s));
       } else {
-        const fileScopes = changedFiles.map(extractModuleName).filter(Boolean);
         if (fileScopes.length > 0) {
           fileScopes.forEach((s) => activeRedScopes.add(s));
         } else {
@@ -133,29 +173,49 @@ export function validateCommitList(commits) {
       } else {
         const gateName = isGreen ? 'feat\\(green\\)' : 'fix';
         const explicitTargetScope = extractScopeFromSubject(trimmedSubject, gateName);
-        let targetScopes = [];
+        const prodFiles = changedFiles.filter(isProductionFile);
 
-        if (explicitTargetScope) {
-          targetScopes = [explicitTargetScope];
+        if (prodFiles.length > 0) {
+          // Cada archivo de producción DEBE estar cubierto por los scopes activos de RED
+          for (const pFile of prodFiles) {
+            const pModule = extractModuleName(pFile);
+            const isUniversal = activeRedScopes.has('*');
+            const matchesModule = activeRedScopes.has(pModule);
+            const matchesExplicit = explicitTargetScope && activeRedScopes.has(explicitTargetScope) && (explicitTargetScope === pModule);
+
+            if (!isUniversal && !matchesModule && !matchesExplicit) {
+              const available = Array.from(activeRedScopes).join(', ') || 'ninguno';
+              errors.push(
+                `[${shortHash}] Violación de Causalidad TDD en '${trimmedSubject}': El archivo de producción modificado '${pFile}' (módulo '${pModule}') no coincide con ningún test(red) activo previo [${available}].`
+              );
+            }
+          }
         } else {
-          targetScopes = changedFiles.map(extractModuleName).filter(Boolean);
+          // Si no modificó archivos de producción directamente, verificar el scope explícito o modificado
+          let targetScopes = explicitTargetScope ? [explicitTargetScope] : changedFiles.map(extractModuleName).filter(Boolean);
+          const isUniversalMatch = activeRedScopes.has('*');
+          const matchedScope = targetScopes.find((s) => activeRedScopes.has(s));
+
+          if (!isUniversalMatch && !matchedScope) {
+            const available = Array.from(activeRedScopes).join(', ') || 'ninguno';
+            const targetStr = targetScopes.join(', ') || 'sin ámbito identificado';
+            errors.push(
+              `[${shortHash}] Violación de Causalidad TDD en '${trimmedSubject}': El ámbito modificado [${targetStr}] no coincide con ningún test(red) activo previo [${available}].`
+            );
+          }
         }
 
-        const isUniversalMatch = activeRedScopes.has('*');
-        const matchedScope = targetScopes.find((s) => activeRedScopes.has(s));
-
-        if (!isUniversalMatch && !matchedScope) {
-          const available = Array.from(activeRedScopes).join(', ') || 'ninguno';
-          const targetStr = targetScopes.join(', ') || 'sin ámbito identificado';
-          errors.push(
-            `[${shortHash}] Violación de Causalidad TDD en '${trimmedSubject}': El ámbito modificado [${targetStr}] no coincide con ningún test(red) activo previo [${available}].`
-          );
-        } else {
-          // Consumir el ámbito satisfecho
-          if (matchedScope) {
-            activeRedScopes.delete(matchedScope);
-          } else if (isUniversalMatch) {
-            activeRedScopes.delete('*');
+        // Consumir scopes satisfechos
+        if (activeRedScopes.has('*')) {
+          activeRedScopes.delete('*');
+        }
+        if (explicitTargetScope && activeRedScopes.has(explicitTargetScope)) {
+          activeRedScopes.delete(explicitTargetScope);
+        }
+        for (const pFile of prodFiles) {
+          const pModule = extractModuleName(pFile);
+          if (activeRedScopes.has(pModule)) {
+            activeRedScopes.delete(pModule);
           }
         }
       }
@@ -290,7 +350,27 @@ export function selfTest() {
     throw new Error('FALLÓ VULNERABILIDAD ADVERSARIAL: verify-gates.mjs permitió código de producción en un commit test(red).');
   }
 
-  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo prueba adversarial Copilot y SDD) pasaron exitosamente.');
+  // Caso 11: Auditoría Copilot (Fallo A - RED documental sin tests reales) -> DEBE SER RECHAZADO
+  const invalidDocRed = [
+    { hash: 'advdoc1', subject: 'test(red)(auth): claimed red on markdown', changedFiles: ['docs/auth.md'] },
+    { hash: 'advdoc2', subject: 'feat(green)(auth): implementation', changedFiles: ['src/auth.ts'] }
+  ];
+  const errsDocRed = validateCommitList(invalidDocRed);
+  if (!errsDocRed.some((e) => e.includes('DEBE modificar al menos un archivo de test'))) {
+    throw new Error('FALLÓ VULNERABILIDAD ADVERSARIAL: verify-gates.mjs aceptó un test(red) que no modificó archivos de test.');
+  }
+
+  // Caso 12: Auditoría Copilot (Fallo B - GREEN multirruta con contrabando de billing bajo scope auth) -> DEBE SER RECHAZADO
+  const invalidMultiGreen = [
+    { hash: 'advmg1', subject: 'test(red)(auth): failing auth test', changedFiles: ['tests/unit/auth.test.ts'] },
+    { hash: 'advmg2', subject: 'feat(green)(auth): impl auth and smuggle billing', changedFiles: ['src/auth.ts', 'src/billing.ts'] }
+  ];
+  const errsMultiGreen = validateCommitList(invalidMultiGreen);
+  if (!errsMultiGreen.some((e) => e.includes("archivo de producción modificado 'src/billing.ts'") && e.includes('no coincide con ningún test(red) activo previo'))) {
+    throw new Error('FALLÓ VULNERABILIDAD ADVERSARIAL: verify-gates.mjs permitió contrabandear src/billing.ts en un GREEN con scope auth.');
+  }
+
+  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo pruebas adversariales Copilot y SDD) pasaron exitosamente.');
 }
 
 function checkCleanWorkingTree(allowDirty = false) {
@@ -320,11 +400,67 @@ function main() {
 
   const baseIdx = args.indexOf('--base');
   const headIdx = args.indexOf('--head');
-  const base = baseIdx !== -1 && args[baseIdx + 1] ? args[baseIdx + 1] : 'origin/main';
-  const head = headIdx !== -1 && args[headIdx + 1] ? args[headIdx + 1] : 'HEAD';
+  const explicitBase = baseIdx !== -1 && args[baseIdx + 1] ? args[baseIdx + 1] : null;
+  const explicitHead = headIdx !== -1 && args[headIdx + 1] ? args[headIdx + 1] : null;
+
+  // 1. Resolver HEAD
+  const head = explicitHead || 'HEAD';
+  const headSha = runGitSafe(`git rev-parse --verify ${head}`);
+  if (!headSha) {
+    console.error(`❌ ERROR DE RESOLUCIÓN GIT: No se pudo resolver la referencia HEAD '${head}'. Verifique que esté dentro de un repositorio Git con commits.`);
+    process.exit(1);
+  }
+
+  // 2. Resolver BASE
+  let base = explicitBase;
+  if (base) {
+    const baseSha = runGitSafe(`git rev-parse --verify ${base}`);
+    if (!baseSha) {
+      console.error(`❌ ERROR DE COMPUERTA: La referencia base especificada '${base}' no existe en el repositorio.`);
+      console.error(`Si está ejecutando en local sin remotos configurados, ejecute 'node scripts/verify-gates.mjs --base <commit-o-rama>' o agregue el remote correspondiente.`);
+      process.exit(1);
+    }
+  } else {
+    // Si no se pasó --base, buscar candidatos válidos
+    const candidates = ['origin/main', 'origin/master', 'main', 'master'];
+    for (const cand of candidates) {
+      const sha = runGitSafe(`git rev-parse --verify ${cand}`);
+      if (sha && sha !== headSha) {
+        base = cand;
+        break;
+      }
+    }
+
+    if (!base) {
+      const prevSha = runGitSafe('git rev-parse --verify HEAD~1');
+      if (prevSha) {
+        base = 'HEAD~1';
+        console.log(`[GATE-INFO] No se detectó remote origin/main. Usando fallback local seguro: base = HEAD~1`);
+      } else {
+        // Es un repositorio de un solo commit inicial
+        console.log(`[GATE-INFO] Repositorio en commit inicial (${headSha.slice(0, 7)}). Auditando el commit inicial...`);
+        const files = (runGitSafe(`git diff-tree --no-commit-id --name-only -r ${headSha}`) || '').split('\n').filter(Boolean);
+        const subject = runGitSafe(`git log -1 --format="%s" ${headSha}`) || '';
+        const errors = validateCommitList([{ hash: headSha, subject, changedFiles: files }]);
+        if (errors.length > 0) {
+          console.error('\n❌ VIOLACIONES DE COMPUERTA DETECTADAS EN COMMIT INICIAL:');
+          errors.forEach((err) => console.error(`  - ${err}`));
+          process.exit(1);
+        }
+        console.log('\n✅ COMMIT INICIAL VALIDADO EXITOSAMENTE (Node.js).');
+        process.exit(0);
+      }
+    }
+  }
 
   const revRange = `${base}..${head}`;
-  const rawCommits = runGit(`git log --reverse --format="%H|%s" ${revRange}`);
+  let rawCommits;
+  try {
+    rawCommits = runGitOrThrow(`git log --reverse --format="%H|%s" ${revRange}`, `Fallo al obtener commits en el rango '${revRange}'`);
+  } catch (err) {
+    console.error(`❌ ERROR DE RESOLUCIÓN GIT:\n${err.message}`);
+    process.exit(1);
+  }
 
   if (!rawCommits) {
     console.log(`[GATE-OK] No hay commits nuevos en el rango ${revRange}.`);
@@ -333,7 +469,7 @@ function main() {
 
   const commits = rawCommits.split('\n').filter(Boolean).map((line) => {
     const [hash, subject] = line.split('|');
-    const files = runGit(`git diff-tree --no-commit-id --name-only -r ${hash}`).split('\n').filter(Boolean);
+    const files = (runGitSafe(`git diff-tree --no-commit-id --name-only -r ${hash}`) || '').split('\n').filter(Boolean);
     return { hash, subject, changedFiles: files };
   });
 

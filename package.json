@@ -39,7 +39,8 @@
     "verify:gates": "node scripts/verify-gates.mjs",
     "verify:gates:py": "python scripts/verify_gates.py",
     "guard": "node scripts/guard-agent.mjs",
-    "prepare": "node scripts/guard-agent.mjs"
+    "prepare": "node scripts/guard-agent.mjs",
+    "setup:branch-protection": "python scripts/setup_branch_protection.py"
   },
   "devDependencies": {
     "@fission-ai/openspec": "^1.6.0",

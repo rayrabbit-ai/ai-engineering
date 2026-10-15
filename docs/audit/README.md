@@ -11,6 +11,7 @@ Este directorio consolida el expediente histórico de auditorías externas, revi
 | **2026-10-14** | [Auditoría Técnica Externa (Copilot GPT-6 Luna)](2026-10-14-auditoria-externa-copilot-luna.es.md) | Auditoría Externa de Afirmaciones y Bypasses Iniciales | Histórico | Bypasses encontrados (F-01 a F-05) |
 | **2026-10-14** | [Informe de Correcciones de Auditoría Inicial](2026-10-14-informe-correcciones.es.md) | Remediación Fase 1 (Branch Protection & Gates) | Resuelto | Mitigación inicial aplicada |
 | **2026-10-15** | [Auditoría Forense y Penetración Adversarial ASVS L3](auditoria-adversarial-forense-asvs-l3.es.md) | Red Team / Auditor Adversarial Ofensivo (OWASP ASVS L3) | Rigor Máximo | Identificados 10 vectores sutiles (F-01 a F-10) |
+| **2026-10-15** | [Auditoría Forense Adversarial Externa](2026-10-15-auditoria-forense-adversarial.es.md) | Auditoría Externa Independiente de Causalidad y Replay | Rigor Máximo | Identificados 5 vectores de causalidad (F-01 a F-05) |
 | **2026-10-15** | [Certificación de Remediación Definitiva](certificacion-remediacion-final.es.md) | Certificación Física de Cierre de Brechas (Exit Code 0) | Vigente | APROBADO — GRADO DE PRODUCCIÓN |
 | **2026-10-15** | [Informe Automatizado de Red Team (10 Dominios)](informe-redteam.es.md) | Suite Automatizada `redteam-audit.mjs` (Fuzzing Diferencial) | **Vigente** | **APROBADO (0 CRITICAL / HIGH)** |
 
@@ -43,6 +44,12 @@ npm run verify:gates:py:self-test
 # Auto-verificación de ejecutores RED anti-inyección
 npm run verify:red:self-test
 npm run verify:red:py:self-test
+
+# Verificación de Replay Histórico Físico de Commits RED en CI
+npm run verify:replay:self-test
+
+# Verificación de Ergonomía CLI TDD
+npm run tdd:flow:self-test
 
 # Cobertura estricta e independiente (Líneas >=80%, Ramas >=75%)
 npm run test:ts:coverage

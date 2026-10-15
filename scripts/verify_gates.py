@@ -31,17 +31,17 @@ if sys.platform == "win32":
         pass
 
 VALID_PREFIXES = [
-    r"^test\(red\)(\([a-z0-9_-]+\))?:",
-    r"^feat\(green\)(\([a-z0-9_-]+\))?:",
-    r"^refactor(\([a-z0-9_-]+\))?:",
+    r"^test\(red\)(\([a-z0-9_/-]+\))?:",
+    r"^feat\(green\)(\([a-z0-9_/-]+\))?:",
+    r"^refactor(\([a-z0-9_/-]+\))?:",
     r"^test\(baseline\):",
     r"^test\(integration\):",
     r"^chore\(hardening\):",
-    r"^fix(\([a-z0-9_-]+\))?:",
-    r"^spec(\([a-z0-9_-]+\))?:",
-    r"^docs(\([a-z0-9_-]+\))?:",
-    r"^triage(\([a-z0-9_-]+\))?:",
-    r"^chore(\([a-z0-9_-]+\))?:",
+    r"^fix(\([a-z0-9_/-]+\))?:",
+    r"^spec(\([a-z0-9_/-]+\))?:",
+    r"^docs(\([a-z0-9_/-]+\))?:",
+    r"^triage(\([a-z0-9_/-]+\))?:",
+    r"^chore(\([a-z0-9_/-]+\))?:",
 ]
 
 LEGACY_PATTERNS = [
@@ -105,7 +105,7 @@ def extract_module_name(file_path: str) -> str:
     norm = file_path.replace("\\", "/")
     # Eliminar prefijos de subproyecto o raíz de pruebas/código
     norm = re.sub(r"^(?:[a-zA-Z0-9_-]+/)?(?:tests|test)/(?:ts/)?(?:unit/|integration/|characterization/|e2e/)?", "", norm, flags=re.IGNORECASE)
-    norm = re.sub(r"^(?:[a-zA-Z0-9_-]+/)?(?:src|lib|app|pkg)/", "", norm, flags=re.IGNORECASE)
+    norm = re.sub(r"^(?:[a-zA-Z0-9_-]+/)?(?:src|lib|app|pkg|rayrabbit)/", "", norm, flags=re.IGNORECASE)
     # Quitar extensiones
     norm = re.sub(r"\.[a-zA-Z0-9]+$", "", norm)
     # Quitar sufijos de test
@@ -123,6 +123,43 @@ def extract_scope_from_subject(subject: str, gate_type: str) -> str | None:
     match = re.match(pattern, subject, re.IGNORECASE)
     if match and match.group(1):
         return match.group(1).lower().strip()
+    return None
+
+def get_active_openspec_changes(base_dir: Path | None = None) -> set[str]:
+    """Escanea y obtiene el conjunto de OpenSpec Changes activos con tasks.md presente."""
+    active: set[str] = set()
+    current = Path.cwd().resolve() if base_dir is None else base_dir.resolve()
+    candidates = []
+    for _ in range(4):
+        candidates.append(current / "openspec" / "changes")
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    for directory in candidates:
+        if directory.is_dir():
+            try:
+                for item in directory.iterdir():
+                    if item.is_dir() and item.name != "archive":
+                        tasks_file = item / "tasks.md"
+                        if tasks_file.is_file():
+                            active.add(item.name)
+            except Exception:
+                pass
+    return active
+
+def extract_openspec_change(subject: str, body: str = "") -> str | None:
+    """Extrae la referencia al OpenSpec Change desde trailers o scope compuesto."""
+    if body:
+        trailer_match = re.search(r"^OpenSpec-Change:\s*([a-z0-9_-]+)", body, re.IGNORECASE | re.MULTILINE)
+        if trailer_match:
+            return trailer_match.group(1).strip()
+    scope_match = re.search(r"^(?:feat\(green\)|fix)\(([a-z0-9_/-]+)\):", subject, re.IGNORECASE)
+    if scope_match:
+        scope = scope_match.group(1).strip()
+        if "/" in scope:
+            return scope.split("/")[0]
+        return scope
     return None
 
 def is_valid_ref_format(ref: str) -> bool:
@@ -174,11 +211,17 @@ def run_git_or_throw(args: list[str], error_msg: str) -> str:
         raise RuntimeError(f"{error_msg}: {err}")
     return res.stdout.strip()
 
-def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]:
+def validate_commit_list(commits: list[tuple], active_changes: set[str] | None = None) -> list[str]:
     errors = []
     active_red_scopes: set[str] = set()
+    active_openspec_changes = active_changes if active_changes is not None else get_active_openspec_changes()
 
-    for commit_hash, subject, changed_files in commits:
+    for item in commits:
+        commit_hash = item[0]
+        subject = item[1]
+        changed_files = item[2]
+        body = item[3] if len(item) > 3 else ""
+
         subject_stripped = subject.strip()
         short_hash = (commit_hash or "0000000")[:7]
 
@@ -191,7 +234,7 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
             )
 
         # 2. Registrar presencia de RED y sus ámbitos
-        if re.match(r"^test\(red\)(\([a-z0-9_-]+\))?:", subject_stripped, re.IGNORECASE):
+        if re.match(r"^test\(red\)(\([a-z0-9_/-]+\))?:", subject_stripped, re.IGNORECASE):
             # Invariante 1 & 3: Un commit test(red) no puede incluir código de producción
             prod_files = [f for f in changed_files if is_production_file(f)]
             if prod_files:
@@ -208,7 +251,8 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                     f"Un commit 'test(red):' DEBE modificar al menos un archivo de test (detectado: 0 archivos de prueba en [{', '.join(changed_files)}])."
                 )
 
-            explicit_scope = extract_scope_from_subject(subject_stripped, r"test\(red\)")
+            raw_scope = extract_scope_from_subject(subject_stripped, r"test\(red\)")
+            explicit_scope = raw_scope.split("/", 1)[1] if (raw_scope and "/" in raw_scope) else raw_scope
             file_scopes = [extract_module_name(f) for f in test_files if extract_module_name(f)]
 
             # F-03: Prohibir scope universal fallback (*). Rechazar si no se puede inferir módulo y no hay scope explícito.
@@ -223,8 +267,8 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                 active_red_scopes.update(file_scopes)
 
         # 3. Validar Causalidad TDD con Acoplamiento por Ámbito (Invariantes 1 y 3)
-        is_green = bool(re.match(r"^feat\(green\)(\([a-z0-9_-]+\))?:", subject_stripped, re.IGNORECASE))
-        is_fix = bool(re.match(r"^fix(\([a-z0-9_-]+\))?:", subject_stripped, re.IGNORECASE))
+        is_green = bool(re.match(r"^feat\(green\)(\([a-z0-9_/-]+\))?:", subject_stripped, re.IGNORECASE))
+        is_fix = bool(re.match(r"^fix(\([a-z0-9_/-]+\))?:", subject_stripped, re.IGNORECASE))
 
         if is_green or is_fix:
             if not active_red_scopes:
@@ -234,22 +278,34 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                 )
             else:
                 gate_name = r"feat\(green\)" if is_green else r"fix"
-                explicit_target = extract_scope_from_subject(subject_stripped, gate_name)
+                raw_target = extract_scope_from_subject(subject_stripped, gate_name)
+                parsed_change = None
+                explicit_target = raw_target
+                if raw_target and "/" in raw_target:
+                    parts = raw_target.split("/")
+                    parsed_change = parts[0]
+                    explicit_target = "/".join(parts[1:])
                 prod_files = [f for f in changed_files if is_production_file(f)]
+
+                # F-03 Mechanical OpenSpec Linkage
+                if prod_files:
+                    declared_change = extract_openspec_change(subject_stripped, body)
+                    change_to_check = parsed_change or declared_change
+                    if not change_to_check or change_to_check not in active_openspec_changes:
+                        errors.append(
+                            f"[{short_hash}] Violación de Trazabilidad SDD en '{subject_stripped}': "
+                            f"Todo commit de producción '{'feat(green)' if is_green else 'fix'}' debe referenciar un OpenSpec Change activo válido (ej. trailer 'OpenSpec-Change: <change-id>' o scope '(<change-id>/<modulo>)'). "
+                            f"El cambio '{change_to_check or 'no declarado'}' no existe en openspec/changes/ o no contiene tasks.md activo."
+                        )
 
                 if prod_files:
                     # Cada archivo de producción DEBE estar estrictamente cubierto por los scopes activos de RED
                     for p_file in prod_files:
                         p_module = extract_module_name(p_file)
-                        matches_module = bool(
-                            p_module and (
-                                p_module in active_red_scopes or
-                                any(p_module.endswith("/" + a) or a.endswith("/" + p_module) for a in active_red_scopes)
-                            )
-                        )
+                        matches_module = bool(p_module and p_module in active_red_scopes)
                         matches_explicit = bool(
                             explicit_target and (explicit_target in active_red_scopes) and
-                            (explicit_target == p_module or p_module.endswith("/" + explicit_target) or explicit_target.endswith("/" + p_module))
+                            explicit_target == p_module
                         )
 
                         if not matches_module and not matches_explicit:
@@ -268,7 +324,7 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                         )
                     else:
                         matched_scope = next(
-                            (s for s in target_scopes if s in active_red_scopes or any(s.endswith("/" + a) or a.endswith("/" + s) for a in active_red_scopes)),
+                            (s for s in target_scopes if s in active_red_scopes),
                             None
                         )
                         if not matched_scope:
@@ -281,23 +337,14 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                         else:
                             for s in target_scopes:
                                 active_red_scopes.discard(s)
-                                to_del = [a for a in active_red_scopes if a.endswith("/" + s) or s.endswith("/" + a)]
-                                for a in to_del:
-                                    active_red_scopes.discard(a)
 
                 # Consumir scopes satisfechos
                 if explicit_target:
                     active_red_scopes.discard(explicit_target)
-                    to_del = [a for a in active_red_scopes if a.endswith("/" + explicit_target) or explicit_target.endswith("/" + a)]
-                    for a in to_del:
-                        active_red_scopes.discard(a)
                 for p_file in prod_files:
                     p_module = extract_module_name(p_file)
                     if p_module:
                         active_red_scopes.discard(p_module)
-                        to_del = [a for a in active_red_scopes if a.endswith("/" + p_module) or p_module.endswith("/" + a)]
-                        for a in to_del:
-                            active_red_scopes.discard(a)
 
         # 4. Validar Inmutabilidad de Baseline (Invariante 2)
         touches_characterization = any(
@@ -333,7 +380,7 @@ def self_test():
     # Caso 1: Flujo válido en Python
     valid_commits = [
         ("c111111", "test(red): failing test for math logic", ["tests/test_calculator.py"]),
-        ("c222222", "feat(green): implement add operation", ["src/calculator.py"]),
+        ("c222222", "feat(green): implement add operation", ["src/calculator.py"], "OpenSpec-Change: deterministic-causality-harness"),
         ("c333333", "refactor: simplify math expression", ["src/calculator.py"])
     ]
     errs = validate_commit_list(valid_commits)
@@ -342,7 +389,7 @@ def self_test():
     # Caso 2: Scope explícito concordante
     valid_explicit = [
         ("c444444", "test(red)(auth): failing token validation", ["tests/test_auth.py"]),
-        ("c555555", "feat(green)(auth): implement token parser", ["src/auth.py"])
+        ("c555555", "feat(green)(auth): implement token parser", ["src/auth.py"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_exp = validate_commit_list(valid_explicit)
     assert not errs_exp, f"Falló scope explícito concordante: {errs_exp}"
@@ -350,7 +397,7 @@ def self_test():
     # Caso 3: Ataque Adversarial de Copilot (RED en a, GREEN no relacionado en b) -> DEBE SER RECHAZADO
     adversarial_copilot = [
         ("cadv111", "test(red): failing test in a", ["tests/test_a.py"]),
-        ("cadv222", "feat(green): implement b without test", ["src/b.py"])
+        ("cadv222", "feat(green): implement b without test", ["src/b.py"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_copilot = validate_commit_list(adversarial_copilot)
     assert any("no coincide con ningún test(red) activo previo" in e for e in errs_copilot), "Falló bloqueo adversarial Copilot (a != b)"
@@ -358,7 +405,7 @@ def self_test():
     # Caso 4: Scope explícito discordante (auth vs billing) -> DEBE SER RECHAZADO
     mismatch_scope = [
         ("c666666", "test(red)(auth): failing test", ["tests/test_auth.py"]),
-        ("c777777", "feat(green)(billing): implement billing logic", ["src/billing.py"])
+        ("c777777", "feat(green)(billing): implement billing logic", ["src/billing.py"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_mis = validate_commit_list(mismatch_scope)
     assert any("no coincide con ningún test(red) activo previo" in e for e in errs_mis), "Falló detección de scopes discordantes"
@@ -381,8 +428,8 @@ def self_test():
     # Caso 7: Consumo de RED (segundo GREEN sin segundo RED) -> DEBE SER RECHAZADO
     double_green = [
         ("cbbbbbb", "test(red): add single test", ["tests/test_calc.py"]),
-        ("cccccc", "feat(green): first implementation", ["src/calc.py"]),
-        ("cdddddd", "feat(green): second implementation without red", ["src/calc.py"])
+        ("cccccc", "feat(green): first implementation", ["src/calc.py"], "OpenSpec-Change: deterministic-causality-harness"),
+        ("cdddddd", "feat(green): second implementation without red", ["src/calc.py"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_dg = validate_commit_list(double_green)
     assert any("Causalidad TDD" in e for e in errs_dg), "Falló detección de segundo GREEN no autorizado"
@@ -404,7 +451,7 @@ def self_test():
     # Caso 10: Auditoría Copilot (Fallo A - RED documental sin tests reales) -> DEBE SER RECHAZADO
     invalid_doc_red = [
         ("cadvdoc1", "test(red)(auth): claimed red on markdown", ["docs/auth.md"]),
-        ("cadvdoc2", "feat(green)(auth): implementation", ["src/auth.py"])
+        ("cadvdoc2", "feat(green)(auth): implementation", ["src/auth.py"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_dr = validate_commit_list(invalid_doc_red)
     assert any("DEBE modificar al menos un archivo de test" in e for e in errs_dr), "Falló bloqueo de test(red) documental sin tests"
@@ -412,7 +459,7 @@ def self_test():
     # Caso 11: Auditoría Copilot (Fallo B - GREEN multirruta con contrabando de billing bajo scope auth) -> DEBE SER RECHAZADO
     invalid_multi_green = [
         ("cadvmg1", "test(red)(auth): failing auth test", ["tests/unit/test_auth.py"]),
-        ("cadvmg2", "feat(green)(auth): impl auth and smuggle billing", ["src/auth.py", "src/billing.py"])
+        ("cadvmg2", "feat(green)(auth): impl auth and smuggle billing", ["src/auth.py", "src/billing.py"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_mg = validate_commit_list(invalid_multi_green)
     assert any("archivo de producción modificado 'src/billing.py'" in e and "no coincide con ningún test(red) activo previo" in e for e in errs_mg), "Falló bloqueo de contrabando multirruta en GREEN"
@@ -420,7 +467,7 @@ def self_test():
     # Caso 12 (F-03 Audit): Bypass con archivo de test que produce nombre vacío tipo tests/test_.py sin scope explícito -> RECHAZADO
     invalid_empty_module = [
         ("cf03red1", "test(red): empty module test", ["tests/test_.py"]),
-        ("cf03grn1", "feat(green): unrelated implementation", ["src/unrelated.ts"])
+        ("cf03grn1", "feat(green): unrelated implementation", ["src/unrelated.ts"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_empty = validate_commit_list(invalid_empty_module)
     assert any("No se pudo inferir un ámbito de módulo válido" in e for e in errs_empty), "FALLÓ VULNERABILIDAD F-03: verify_gates.py permitió bypass con módulo vacío"
@@ -428,7 +475,7 @@ def self_test():
     # Caso 14 (F-03 Audit): Cross-Directory Scope Spoofing (tests/ui/button.test.ts vs src/payments/button.ts) -> DEBE SER RECHAZADO
     invalid_cross_dir = [
         ("ccross11", "test(red): test ui button", ["tests/ui/button.test.ts"]),
-        ("ccross22", "feat(green): implement payments button without auth", ["src/payments/button.ts"])
+        ("ccross22", "feat(green): implement payments button without auth", ["src/payments/button.ts"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_cross = validate_commit_list(invalid_cross_dir)
     assert any("no coincide con ningún test(red) activo previo" in e for e in errs_cross), "FALLÓ VULNERABILIDAD F-03: verify_gates.py permitió spoofing de ámbito entre subdirectorios distintos"
@@ -436,7 +483,7 @@ def self_test():
     # Caso 15 (Auditoría Adversarial): Archivo no ejecutable en tests/ (tests/foo.txt) no califica como test -> DEBE SER RECHAZADO
     invalid_non_code = [
         ("ctxt1111", "test(red): add txt fixture", ["tests/foo.txt"]),
-        ("ctxt2222", "feat(green): implement foo", ["src/foo.ts"])
+        ("ctxt2222", "feat(green): implement foo", ["src/foo.ts"], "OpenSpec-Change: deterministic-causality-harness")
     ]
     errs_non_code = validate_commit_list(invalid_non_code)
     assert any("DEBE modificar al menos un archivo de test" in e for e in errs_non_code), "FALLÓ AUDITORÍA ADVERSARIAL: verify_gates.py aceptó un archivo .txt no ejecutable como test"
@@ -448,6 +495,47 @@ def self_test():
     ]
     errs_ghost = validate_commit_list(invalid_ghost)
     assert any("no coincide con ningún test(red) activo previo" in e for e in errs_ghost), "FALLÓ AUDITORÍA ADVERSARIAL: verify_gates.py permitió commit feat(green) fantasma sin código ni scope acoplado"
+
+    # Caso 17 (F-01 Forensic Audit): Suffix Collision Bypass (tests/test_auth.py vs src/billing/auth.py) -> DEBE SER RECHAZADO
+    invalid_suffix = [
+        ("red0001", "test(red): auth test", ["tests/test_auth.py"]),
+        ("green01", "feat(green): modify billing auth", ["src/billing/auth.py"], "OpenSpec-Change: deterministic-causality-harness")
+    ]
+    errs_suffix = validate_commit_list(invalid_suffix)
+    assert any("no coincide con ningún test(red) activo previo" in e for e in errs_suffix), "FALLÓ VULNERABILIDAD F-01: verify_gates.py permitió bypass por colisión de sufijo (auth -> billing/auth)"
+
+    # Caso 18 (F-03 Mechanical OpenSpec Linkage): Trazabilidad SDD obligatoria en feat(green) y fix
+    # 18a: Modifica src/ sin OpenSpec Change -> DEBE SER RECHAZADO
+    missing_openspec = [
+        ("os0001", "test(red)(calc): failing calc test", ["tests/unit/test_calc.py"]),
+        ("os0002", "feat(green)(calc): impl calc without openspec trailer", ["src/calc.py"])
+    ]
+    errs_missing_os = validate_commit_list(missing_openspec)
+    assert any("Trazabilidad SDD" in e for e in errs_missing_os), "FALLÓ COMPUERTA SDD F-03: verify_gates.py permitió commit de producción sin OpenSpec Change"
+
+    # 18b: Modifica src/ con OpenSpec Change inexistente -> DEBE SER RECHAZADO
+    fake_openspec = [
+        ("os0003", "test(red)(calc): failing calc test", ["tests/unit/test_calc.py"]),
+        ("os0004", "feat(green)(calc): impl calc with nonexistent change", ["src/calc.py"], "OpenSpec-Change: fake-nonexistent-change")
+    ]
+    errs_fake_os = validate_commit_list(fake_openspec)
+    assert any("Trazabilidad SDD" in e for e in errs_fake_os), "FALLÓ COMPUERTA SDD F-03: verify_gates.py permitió commit de producción con OpenSpec Change inexistente"
+
+    # 18c: Modifica src/ con OpenSpec Change válido vía trailer -> DEBE SER ACEPTADO
+    valid_trailer_os = [
+        ("os0005", "test(red)(calc): failing calc test", ["tests/unit/test_calc.py"]),
+        ("os0006", "feat(green)(calc): impl calc with valid trailer", ["src/calc.py"], "OpenSpec-Change: deterministic-causality-harness")
+    ]
+    errs_valid_trailer_os = validate_commit_list(valid_trailer_os)
+    assert not errs_valid_trailer_os, f"Falló aceptación de commit con trailer OpenSpec válido: {errs_valid_trailer_os}"
+
+    # 18d: Modifica src/ con OpenSpec Change válido vía scope compuesto (<change>/<modulo>) -> DEBE SER ACEPTADO
+    valid_composite_scope_os = [
+        ("os0007", "test(red)(calc): failing calc test", ["tests/unit/test_calc.py"]),
+        ("os0008", "feat(green)(deterministic-causality-harness/calc): impl calc with composite scope", ["src/calc.py"])
+    ]
+    errs_valid_composite_os = validate_commit_list(valid_composite_scope_os)
+    assert not errs_valid_composite_os, f"Falló aceptación de commit con scope compuesto OpenSpec válido: {errs_valid_composite_os}"
 
     print("[SELF-TEST] ✅ Todas las aserciones internas y pruebas adversariales pasaron con éxito.\n")
     return 0
@@ -544,7 +632,7 @@ def main():
         return 1
     rev_range = f"{base_sha}..{head_sha}"
     try:
-        raw_commits = run_git_or_throw(["log", "--reverse", "--format=%H|%s", rev_range], f"Fallo al obtener commits en el rango '{rev_range}'")
+        raw_commits = run_git_or_throw(["log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", rev_range], f"Fallo al obtener commits en el rango '{rev_range}'")
     except RuntimeError as err:
         print(f"❌ ERROR DE RESOLUCIÓN GIT:\n{err}", file=sys.stderr)
         return 1
@@ -554,11 +642,16 @@ def main():
         return 0
 
     commits = []
-    for line in raw_commits.splitlines():
-        if "|" in line:
-            h, s = line.split("|", 1)
-            files = (run_git_safe(["diff-tree", "--no-commit-id", "--name-only", "-r", h]) or "").splitlines()
-            commits.append((h, s, files))
+    for chunk in raw_commits.split("\x1e"):
+        chunk_clean = chunk.strip()
+        if not chunk_clean:
+            continue
+        parts = chunk_clean.split("\x1f")
+        h = parts[0] if len(parts) > 0 else ""
+        s = parts[1] if len(parts) > 1 else ""
+        b = parts[2] if len(parts) > 2 else ""
+        files = (run_git_safe(["diff-tree", "--no-commit-id", "--name-only", "-r", h]) or "").splitlines()
+        commits.append((h, s, files, b))
 
     print(f"[GATE-VALIDATOR] Analizando {len(commits)} commits en {rev_range}...")
     errors = validate_commit_list(commits)

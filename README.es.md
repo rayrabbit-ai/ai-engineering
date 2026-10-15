@@ -29,7 +29,10 @@ Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven D
    - Verificación física del fallo legítimo (exit code != 0) mediante `npm run verify:red` / `npm run verify:red:py`.
 3. **Bloqueo físico de merges en CI mediante Branch Protection**: Ningún Pull Request puede fusionarse si viola la causalidad TDD, la inmutabilidad de baselines o los umbrales de cobertura (ver [`docs/BRANCH_PROTECTION.md`](docs/BRANCH_PROTECTION.md)).
 4. **Protección contra CWE-78 y Manipulación de Gates**: Invocación segura de Git sin shells con validación formal de referencias (`git check-ref-format`); `.github/CODEOWNERS` impide que un PR debilite los gates.
-5. **Auditoría Adversarial y Guard Integrados**: Validación pre-push y en CI mediante [`guard-agent`](scripts/guard-agent.mjs), el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
+5. **Replay Histórico Físico de Commits RED en CI**: Cada commit `test(red)` es reproducido mecánicamente contra su commit padre `<sha>^` en un `git worktree` aislado para verificar fallos físicos por `AssertionError`, bloqueando activamente fraudes (tests prematuramente verdes) o errores de sintaxis ([`verify-historical-replay.mjs`](scripts/verify-historical-replay.mjs)).
+6. **Trazabilidad Mecánica de OpenSpec Change**: Todo commit de código de producción (`feat(green)` y `fix`) requiere metadatos válidos de un OpenSpec Change activo (trailer `OpenSpec-Change:` o scope compuesto), garantizando causalidad SDD de extremo a extremo.
+7. **CLI de Ergonomía para Flujo TDD**: Comandos unificados (`npm run tdd:red`, `npm run tdd:green`, `npm run tdd:refactor` mediante [`tdd-flow.mjs`](scripts/tdd-flow.mjs)) que automatizan aserciones, deducción de ámbitos y creación de commits.
+8. **Auditoría Adversarial y Guard Integrados**: Validación pre-push y en CI mediante [`guard-agent`](scripts/guard-agent.mjs), el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
 > 🔬 **Evidencia Empírica y Auditoría Hostil de IA**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde documentamos cómo un agente sin restricciones cae en *"La Ilusión de TDD"* y es bloqueado por las compuertas de CI.
 >
@@ -153,9 +156,12 @@ Este repositorio incluye puntos de entrada canónicos en la raíz para que los a
 ├── scripts/
 │   ├── verify-gates.mjs         # Validador de commits en Node.js inmune a CWE-78
 │   ├── verify_gates.py          # Validador de commits en Python inmune a CWE-78
+│   ├── verify-historical-replay.mjs # Replay histórico físico de commits RED en CI (git worktree)
 │   ├── verify-red-failure.mjs   # Aserción física de fallo en fase RED (Node.js)
 │   ├── verify_red_failure.py    # Aserción física de fallo en fase RED (Python)
 │   ├── check_python_coverage.py # Verificador mecánico independiente de líneas y ramas
+│   ├── tdd-flow.mjs             # CLI de ergonomía TDD (tdd:red, tdd:green, tdd:refactor)
+│   ├── redteam-audit.mjs        # Motor automatizado de auditoría Red Team (10 dominios ASVS L3)
 │   ├── guard-agent.mjs          # Guardián estructural y semántico de contratos
 │   ├── setup_branch_protection.py # Configuración automatizada de branch protection
 │   └── setup-branch-protection.sh # Script bash para branch protection
@@ -185,14 +191,22 @@ python -m pip install --no-deps --no-build-isolation -e .
 # 3. Activar el bloqueo físico de rama en GitHub (1 comando)
 npm run setup:branch-protection
 
-# 4. Auditar compuertas de commits en cualquier momento
+# 4. Comandos de Ergonomía TDD
+npm run tdd:red -- "agregar test de multiplicación"       # Verifica fallo y comitea test(red)
+npm run tdd:green -- "implementar multiplicación"         # Verifica pase, cobertura y comitea feat(green)
+npm run tdd:refactor -- "optimizar algoritmo aritmético"  # Verifica sin regresión y comitea refactor
+
+# 5. Auditar compuertas de commits en cualquier momento
 npm run verify:gates
 
-# 5. Ejecutar pruebas con cobertura separada de líneas y ramas
+# 6. Replay histórico físico de commits RED localmente o en CI
+npm run verify:replay:self-test
+
+# 7. Ejecutar pruebas con cobertura separada de líneas y ramas
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
 
-# 6. Ejecutar auditoría ofensiva y red teaming automatizado de 10 dominios
+# 8. Ejecutar auditoría ofensiva y red teaming automatizado de 10 dominios
 npm run audit:redteam
 ```
 

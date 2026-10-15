@@ -29,7 +29,10 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
    - Physical non-zero exit code failure can be asserted via `npm run verify:red` / `npm run verify:red:py`.
 3. **Physical merge blocking in CI via Branch Protection**: Pull Requests cannot be merged if they violate TDD commit causality, baseline immutability, or coverage thresholds (see [`docs/BRANCH_PROTECTION.md`](docs/BRANCH_PROTECTION.md)).
 4. **Hardened against CWE-78 & Tampering**: All Git operations use direct process spawning with strict reference format validation (`git check-ref-format`); `.github/CODEOWNERS` prevents untrusted PRs from weakening the gates.
-5. **Built-in Adversarial Audit & Guard**: Pre-push and CI enforcement via [`guard-agent`](scripts/guard-agent.mjs), [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md), and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
+5. **Physical Historical Replay of RED Commits in CI**: Every `test(red)` commit is mechanically replayed against its parent commit `<sha>^` in an isolated `git worktree` to verify physical `AssertionError` failures, actively rejecting premature green tests and syntax errors ([`verify-historical-replay.mjs`](scripts/verify-historical-replay.mjs)).
+6. **Mechanical OpenSpec Change Linkage**: All production commits (`feat(green)` and `fix`) require active OpenSpec Change metadata (`OpenSpec-Change:` trailer or composite scope), ensuring end-to-end SDD traceability.
+7. **Developer Ergonomics TDD CLI**: High-velocity CLI helpers (`npm run tdd:red`, `npm run tdd:green`, `npm run tdd:refactor` via [`tdd-flow.mjs`](scripts/tdd-flow.mjs)) automate test verification, scope deduction, and commit construction.
+8. **Built-in Adversarial Audit & Guard**: Pre-push and CI enforcement via [`guard-agent`](scripts/guard-agent.mjs), [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md), and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
 > 🔬 **Empirical Evidence & Hostile AI Auditing**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
 >
@@ -153,9 +156,12 @@ This repository includes native root rule entrypoints so AI coding assistants lo
 ├── scripts/
 │   ├── verify-gates.mjs         # Hardened Node.js commit gate auditor (CWE-78 immune)
 │   ├── verify_gates.py          # Hardened Python commit gate auditor (CWE-78 immune)
+│   ├── verify-historical-replay.mjs # Physical RED test failure replay in CI (git worktree)
 │   ├── verify-red-failure.mjs   # Physical verification of RED failure (Node.js)
 │   ├── verify_red_failure.py    # Physical verification of RED failure (Python)
 │   ├── check_python_coverage.py # Independent Line & Branch coverage verifier
+│   ├── tdd-flow.mjs             # Developer ergonomics CLI (tdd:red, tdd:green, tdd:refactor)
+│   ├── redteam-audit.mjs        # 10-domain automated adversarial red team engine
 │   ├── guard-agent.mjs          # Semantic and structural contract guardian
 │   ├── setup_branch_protection.py # Automated GitHub branch protection setup
 │   └── setup-branch-protection.sh # Bash setup script for branch protection
@@ -185,14 +191,22 @@ python -m pip install --no-deps --no-build-isolation -e .
 # 3. Enable physical branch protection on GitHub (1 command)
 npm run setup:branch-protection
 
-# 4. Audit commit gates at any time
+# 4. Developer Ergonomics TDD Commands
+npm run tdd:red -- "add multiplication operator"       # Verify failure & commit test(red)
+npm run tdd:green -- "implement multiplication"        # Verify pass, coverage & commit feat(green)
+npm run tdd:refactor -- "optimize arithmetic algorithm" # Verify regression-free & commit refactor
+
+# 5. Audit commit gates at any time
 npm run verify:gates
 
-# 5. Run tests with separate line & branch coverage
+# 6. Verify historical replay of RED commits locally or in CI
+npm run verify:replay:self-test
+
+# 7. Run tests with separate line & branch coverage
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
 
-# 6. Execute full automated 10-domain adversarial red team audit
+# 8. Execute full automated 10-domain adversarial red team audit
 npm run audit:redteam
 ```
 

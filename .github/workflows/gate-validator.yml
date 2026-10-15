@@ -83,7 +83,6 @@ jobs:
   test-typescript:
     name: "Suite TypeScript / Node.js & Cobertura"
     runs-on: ubuntu-latest
-    if: hashFiles('package.json') != ''
     steps:
       - name: Checkout código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -112,7 +111,6 @@ jobs:
   test-python:
     name: "Suite Python & Cobertura"
     runs-on: ubuntu-latest
-    if: hashFiles('pyproject.toml') != ''
     steps:
       - name: Checkout repositorio con historial completo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -187,4 +185,4 @@ jobs:
 
       - name: Ejecutar Suite de Red Team Automatizado (10 Dominios)
         run: |
-          npm run audit:redteam
+          node scripts/redteam-audit.mjs --report docs/audit/informe-redteam.es.md

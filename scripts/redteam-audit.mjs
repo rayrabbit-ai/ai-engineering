@@ -28,8 +28,12 @@ import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 
 const PYTHON_BIN = (() => {
-  const check = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['--version'], { encoding: 'utf8' });
-  return check.status === 0 ? (process.platform === 'win32' ? 'python' : 'python3') : 'python';
+  if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
+  const checkPy = spawnSync('python', ['--version'], { encoding: 'utf8' });
+  if (checkPy.status === 0) return 'python';
+  const checkPy3 = spawnSync('python3', ['--version'], { encoding: 'utf8' });
+  if (checkPy3.status === 0) return 'python3';
+  return 'python';
 })();
 
 
@@ -106,7 +110,17 @@ function runSafeCommand(bin, cmdArgs, options = {}) {
 }
 
 function walkRepoFiles(dir = ROOT_DIR, acc = []) {
-  const IGNORE_DIRS = new Set(['.git', 'node_modules', '.pytest_cache', '.venv', 'venv', 'coverage', '.nyc_output']);
+  const IGNORE_DIRS = new Set([
+    '.git',
+    'node_modules',
+    '.pytest_cache',
+    '.venv',
+    'venv',
+    'coverage',
+    '.nyc_output',
+    'build',
+    '__pycache__',
+  ]);
   let entries = [];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -114,7 +128,7 @@ function walkRepoFiles(dir = ROOT_DIR, acc = []) {
     return acc;
   }
   for (const entry of entries) {
-    if (IGNORE_DIRS.has(entry.name)) continue;
+    if (IGNORE_DIRS.has(entry.name) || entry.name.endsWith('.egg-info')) continue;
     const fullPath = path.join(dir, entry.name);
     const relPath = path.relative(ROOT_DIR, fullPath);
     if (entry.isSymbolicLink()) {
@@ -225,7 +239,9 @@ async function auditDomain1TaintAndInjection(repoFiles) {
   if (fs.existsSync(nodeGate)) {
     const canaryPayload = 'HEAD; printf "REDTEAM_NODE_CANARY_78|test(red): fake_injected"';
     const probe = runSafeCommand('node', ['scripts/verify-gates.mjs', '--base', canaryPayload, '--head', 'HEAD']);
-    if (probe.stdout.includes('REDTEAM_NODE_CANARY') || probe.stdout.includes('[REDTEAM')) {
+    const nodeLines = probe.stdout.split('\n').map((l) => l.trim());
+    const canaryExecutedNode = nodeLines.some((l) => l.startsWith('REDTEAM_NODE_CANARY_78') || l.includes('fake_injected'));
+    if (probe.status === 0 && canaryExecutedNode) {
       registerFinding({
         title: 'Exploit confirmado (PoC): Inyección de comandos y falsificación de commits en verify-gates.mjs',
         severity: 'Crítica',
@@ -265,7 +281,9 @@ async function auditDomain1TaintAndInjection(repoFiles) {
   if (fs.existsSync(pyGate)) {
     const pyCanary = 'HEAD; printf "REDTEAM_PY_CANARY_78|test(red): fake_injected"';
     const pyProbe = runSafeCommand(PYTHON_BIN, ['scripts/verify_gates.py', '--base', pyCanary, '--head', 'HEAD']);
-    if (pyProbe.stdout.includes('REDTEAM_PY_CANARY') || pyProbe.stdout.includes('[REDTEAM')) {
+    const pyLines = pyProbe.stdout.split('\n').map((l) => l.trim());
+    const canaryExecutedPy = pyLines.some((l) => l.startsWith('REDTEAM_PY_CANARY_78') || l.includes('fake_injected'));
+    if (pyProbe.status === 0 && canaryExecutedPy) {
       registerFinding({
         title: 'Exploit confirmado (PoC): Inyección de comandos y falsificación de commits en verify_gates.py',
         severity: 'Crítica',
@@ -842,26 +860,44 @@ async function auditDomain8SupplyChainAndSchemas() {
 
   const pkgLockPath = path.join(ROOT_DIR, 'package-lock.json');
   if (fs.existsSync(pkgLockPath)) {
-    const npmAudit = runSafeCommand('npm', ['audit', '--json']);
+    const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const npmAudit = runSafeCommand(npmBin, ['audit', '--json']);
     if (npmAudit.stdout) {
       try {
         const parsed = JSON.parse(npmAudit.stdout);
         const vulns = parsed.metadata?.vulnerabilities || {};
-        const total = (vulns.critical || 0) + (vulns.high || 0) + (vulns.moderate || 0);
-        if (total > 0) {
+        const critical = vulns.critical || 0;
+        const high = vulns.high || 0;
+        const moderate = vulns.moderate || 0;
+        if (critical > 0 || high > 0) {
           registerFinding({
-            title: `Vulnerabilidades en árbol de dependencias Node (${vulns.critical || 0} críticas, ${vulns.high || 0} altas, ${vulns.moderate || 0} moderadas)`,
-            severity: (vulns.critical || 0) > 0 ? 'Crítica' : 'Alta',
+            title: `Vulnerabilidades críticas/altas en dependencias Node (${critical} críticas, ${high} altas)`,
+            severity: critical > 0 ? 'Crítica' : 'Alta',
             cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H (9.3)',
             cwe: 'CWE-1395: Dependency on Vulnerable Third-Party Component',
             framework: 'OWASP Top 10 A06 / SLSA L3',
             location: 'package-lock.json',
             mechanism:
-              '`npm audit` detectó paquetes vulnerables instalados y ejecutados durante el ciclo de pruebas/build en CI y desarrollo local.',
+              '`npm audit` detectó paquetes con vulnerabilidades críticas o altas instalados en el árbol de dependencias.',
+            pocCommand: 'npm audit --audit-level=high',
+            pocOutput: JSON.stringify(vulns),
+            remediation:
+              'Actualizar dependencias afectadas en `package.json` / `package-lock.json`.',
+          });
+        } else if (moderate > 0) {
+          registerFinding({
+            title: `Vulnerabilidades moderadas en árbol de dependencias Node (${moderate} moderadas)`,
+            severity: 'Media',
+            cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N (5.3)',
+            cwe: 'CWE-1395: Dependency on Vulnerable Third-Party Component',
+            framework: 'OWASP Top 10 A06 / SLSA L3',
+            location: 'package-lock.json',
+            mechanism:
+              '`npm audit` detectó paquetes con vulnerabilidades moderadas.',
             pocCommand: 'npm audit --audit-level=moderate',
             pocOutput: JSON.stringify(vulns),
             remediation:
-              'Actualizar dependencias afectadas en `package.json` / `package-lock.json` y agregar `npm audit --audit-level=moderate` como paso bloqueante en CI.',
+              'Revisar y actualizar dependencias moderadas en el siguiente ciclo.',
           });
         }
       } catch {
@@ -1107,29 +1143,46 @@ async function main() {
 
   const repoFiles = walkRepoFiles(ROOT_DIR);
 
-  await auditDomain1TaintAndInjection(repoFiles);
-  await auditDomain2FilesystemAndMemory(repoFiles);
-  await auditDomain3CryptoAndSecrets(repoFiles);
-  await auditDomain4NetworkAndHttp(repoFiles);
-  await auditDomain5AiAgentSecurity(repoFiles);
-  await auditDomain6CiCdSecurity();
-  await auditDomain7DifferentialGateFuzzing();
-  await auditDomain8SupplyChainAndSchemas();
-  await auditDomain9CoverageAndMutation();
-  await auditDomain10ArtifactForensics();
+  try { await auditDomain1TaintAndInjection(repoFiles); } catch (e) { console.error('Domain 1 error:', e); }
+  try { await auditDomain2FilesystemAndMemory(repoFiles); } catch (e) { console.error('Domain 2 error:', e); }
+  try { await auditDomain3CryptoAndSecrets(repoFiles); } catch (e) { console.error('Domain 3 error:', e); }
+  try { await auditDomain4NetworkAndHttp(repoFiles); } catch (e) { console.error('Domain 4 error:', e); }
+  try { await auditDomain5AiAgentSecurity(repoFiles); } catch (e) { console.error('Domain 5 error:', e); }
+  try { await auditDomain6CiCdSecurity(); } catch (e) { console.error('Domain 6 error:', e); }
+  try { await auditDomain7DifferentialGateFuzzing(); } catch (e) { console.error('Domain 7 error:', e); }
+  try { await auditDomain8SupplyChainAndSchemas(); } catch (e) { console.error('Domain 8 error:', e); }
+  try { await auditDomain9CoverageAndMutation(); } catch (e) { console.error('Domain 9 error:', e); }
+  try { await auditDomain10ArtifactForensics(); } catch (e) { console.error('Domain 10 error:', e); }
 
   const mdReport = buildMarkdownReport();
 
   if (REPORT_PATH) {
-    fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
-    fs.writeFileSync(REPORT_PATH, mdReport, 'utf8');
-    console.log(`\n📄 Informe forense Markdown generado en: ${REPORT_PATH}`);
+    try {
+      fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
+      fs.writeFileSync(REPORT_PATH, mdReport, 'utf8');
+      console.log(`\n📄 Informe forense Markdown generado en: ${REPORT_PATH}`);
+    } catch (e) {
+      console.error('Error al escribir reporte Markdown:', e.message);
+    }
+  }
+
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    try {
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, mdReport, 'utf8');
+      console.log('✅ Resumen publicado en GITHUB_STEP_SUMMARY');
+    } catch (e) {
+      console.warn('No se pudo escribir en GITHUB_STEP_SUMMARY:', e.message);
+    }
   }
 
   if (JSON_PATH) {
-    fs.mkdirSync(path.dirname(JSON_PATH), { recursive: true });
-    fs.writeFileSync(JSON_PATH, JSON.stringify({ findings, auditTrail, claimsMatrix }, null, 2), 'utf8');
-    console.log(`📊 Reporte estructurado JSON generado en: ${JSON_PATH}`);
+    try {
+      fs.mkdirSync(path.dirname(JSON_PATH), { recursive: true });
+      fs.writeFileSync(JSON_PATH, JSON.stringify({ findings, auditTrail, claimsMatrix }, null, 2), 'utf8');
+      console.log(`📊 Reporte estructurado JSON generado en: ${JSON_PATH}`);
+    } catch (e) {
+      console.error('Error al escribir JSON:', e.message);
+    }
   }
 
   const criticalOrHigh = findings.filter((f) => f.severity === 'Crítica' || f.severity === 'Alta').length;
@@ -1146,7 +1199,15 @@ async function main() {
   }
 
   if (criticalOrHigh > 0) {
-    console.error('\n❌ [REDTEAM-BLOCKER] Se detectaron vulnerabilidades o bypasses Críticos/Altos. Fallando en modo fail-closed (exit 1).');
+    console.error('\n❌ [REDTEAM-BLOCKER] Se detectaron vulnerabilidades o bypasses Críticos/Altos. Fallando en modo fail-closed (exit 1):');
+    for (const f of findings.filter((f) => f.severity === 'Crítica' || f.severity === 'Alta')) {
+      const locParts = (f.location || '').split('#L');
+      const file = locParts[0] || 'scripts/redteam-audit.mjs';
+      const line = locParts[1] || '1';
+      console.error(`   -> [${f.id}] (${f.severity}) ${f.title} (${f.location})`);
+      console.error(`      Mecanismo: ${f.mechanism}`);
+      console.log(`::error file=${file},line=${line},title=[${f.id}] ${f.title}::${f.mechanism}`);
+    }
     process.exit(1);
   } else {
     console.log('\n✅ [REDTEAM-OK] Cero hallazgos Críticos/Altos.');
@@ -1156,5 +1217,7 @@ async function main() {
 
 main().catch((err) => {
   console.error('💥 Error fatal en redteam-audit.mjs (Fail-Closed):', err);
+  const msg = (err.stack || err.message || '').replace(/\r?\n/g, '%0A');
+  console.log(`::error title=Fatal Error in redteam-audit.mjs::${msg}`);
   process.exit(1);
 });

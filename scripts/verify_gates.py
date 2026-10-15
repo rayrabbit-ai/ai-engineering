@@ -486,23 +486,23 @@ def main():
     # 1. Resolver HEAD de forma segura
     head = args.head or "HEAD"
     if not is_valid_ref_format(head):
-        print(f"❌ ERROR DE SEGURIDAD GIT: La referencia HEAD '{head}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).")
+        print(f"❌ ERROR DE SEGURIDAD GIT: La referencia HEAD '{head}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).", file=sys.stderr)
         return 1
     head_sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", head])
     if not head_sha:
-        print(f"❌ ERROR DE RESOLUCIÓN GIT: No se pudo resolver la referencia HEAD '{head}'. Verifique que esté dentro de un repositorio Git con commits.")
+        print(f"❌ ERROR DE RESOLUCIÓN GIT: No se pudo resolver la referencia HEAD '{head}'. Verifique que esté dentro de un repositorio Git con commits.", file=sys.stderr)
         return 1
 
     # 2. Resolver BASE de forma segura
     base = args.base
     if base:
         if not is_valid_ref_format(base):
-            print(f"❌ ERROR DE SEGURIDAD GIT: La referencia base '{base}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).")
+            print(f"❌ ERROR DE SEGURIDAD GIT: La referencia base '{base}' contiene formato inválido o metacaracteres no permitidos (CWE-78 mitigation).", file=sys.stderr)
             return 1
         base_sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", base])
         if not base_sha:
-            print(f"❌ ERROR DE COMPUERTA: La referencia base especificada '{base}' no existe en el repositorio.")
-            print("Si está ejecutando en local sin remotos configurados, ejecute 'python scripts/verify_gates.py --base <commit-o-rama>' o agregue el remote correspondiente.")
+            print(f"❌ ERROR DE COMPUERTA: La referencia base especificada '{base}' no existe en el repositorio.", file=sys.stderr)
+            print("Si está ejecutando en local sin remotos configurados, ejecute 'python scripts/verify_gates.py --base <commit-o-rama>' o agregue el remote correspondiente.", file=sys.stderr)
             return 1
     else:
         # Si no se pasó --base, buscar candidatos válidos
@@ -531,22 +531,22 @@ def main():
                 files = (run_git_safe(["diff-tree", "--no-commit-id", "--name-only", "-r", head_sha]) or "").splitlines()
                 errors = validate_commit_list([(head_sha, subject, files)])
                 if errors:
-                    print("\n❌ VIOLACIONES DE COMPUERTA DETECTADAS EN COMMIT INICIAL:")
+                    print("\n❌ VIOLACIONES DE COMPUERTA DETECTADAS EN COMMIT INICIAL:", file=sys.stderr)
                     for err in errors:
-                        print(f"  - {err}")
+                        print(f"  - {err}", file=sys.stderr)
                     return 1
                 print("\n✅ COMMIT INICIAL VALIDADO EXITOSAMENTE (Python).")
                 return 0
 
     base_sha = run_git_safe(["rev-parse", "--verify", "--end-of-options", base])
     if not base_sha:
-        print(f"❌ ERROR DE COMPUERTA: No se pudo resolver la referencia base '{base}'.")
+        print(f"❌ ERROR DE COMPUERTA: No se pudo resolver la referencia base '{base}'.", file=sys.stderr)
         return 1
     rev_range = f"{base_sha}..{head_sha}"
     try:
         raw_commits = run_git_or_throw(["log", "--reverse", "--format=%H|%s", rev_range], f"Fallo al obtener commits en el rango '{rev_range}'")
     except RuntimeError as err:
-        print(f"❌ ERROR DE RESOLUCIÓN GIT:\n{err}")
+        print(f"❌ ERROR DE RESOLUCIÓN GIT:\n{err}", file=sys.stderr)
         return 1
 
     if not raw_commits:
@@ -564,9 +564,9 @@ def main():
     errors = validate_commit_list(commits)
 
     if errors:
-        print("\n[ERROR] VIOLACIONES DE COMPUERTA DETECTADAS:")
+        print("\n[ERROR] VIOLACIONES DE COMPUERTA DETECTADAS:", file=sys.stderr)
         for err in errors:
-            print(f"  - {err}")
+            print(f"  - {err}", file=sys.stderr)
         return 1
 
     print("\n[GATE-OK] TODAS LAS COMPUERTAS DE COMMITS APROBADAS (Python).")

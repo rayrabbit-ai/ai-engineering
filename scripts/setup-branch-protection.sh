@@ -50,7 +50,8 @@ gh api \
       "Auditoría de Commits por Compuerta (Invariantes 1 y 3)",
       "Validación de Especificaciones OpenSpec",
       "Suite TypeScript / Node.js & Cobertura",
-      "Suite Python & Cobertura"
+      "Suite Python & Cobertura",
+      "Auditoría Ofensiva Red Team (10 Dominios ASVS L3)"
     ]
   },
   "enforce_admins": true,

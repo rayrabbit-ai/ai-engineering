@@ -31,7 +31,13 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
 4. **Hardened against CWE-78 & Tampering**: All Git operations use direct process spawning with strict reference format validation (`git check-ref-format`); `.github/CODEOWNERS` prevents untrusted PRs from weakening the gates.
 5. **Built-in Adversarial Audit & Guard**: Pre-push and CI enforcement via [`guard-agent`](scripts/guard-agent.mjs), [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md), and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
-> 🔬 **Empirical Evidence**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
+> 🔬 **Empirical Evidence & Hostile AI Auditing**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
+>
+> 📸 **Battle-Tested Under Live Adversarial Stress**: Rather than relying on theoretical claims, this template was subjected to live adversarial stress-testing in GitHub Codespaces by frontline AI models (GitHub Copilot / GPT-6 Luna) prompted to actively exploit edge cases and break gates. Every nuance was physically remediated, verified, and sealed with 0 open vulnerabilities (see [Full Audit Dossier](./docs/audit/README.md)).
+>
+> <p align="center">
+>   <img src="docs/assets/codespaces-adversarial-copilot-audit.png" alt="Live Adversarial Audit in GitHub Codespaces" width="850"/>
+> </p>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -185,6 +191,9 @@ npm run verify:gates
 # 5. Run tests with separate line & branch coverage
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
+
+# 6. Execute full automated 10-domain adversarial red team audit
+npm run audit:redteam
 ```
 
 ---

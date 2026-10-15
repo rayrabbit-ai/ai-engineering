@@ -31,7 +31,13 @@ Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven D
 4. **Protección contra CWE-78 y Manipulación de Gates**: Invocación segura de Git sin shells con validación formal de referencias (`git check-ref-format`); `.github/CODEOWNERS` impide que un PR debilite los gates.
 5. **Auditoría Adversarial y Guard Integrados**: Validación pre-push y en CI mediante [`guard-agent`](scripts/guard-agent.mjs), el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
-> 🔬 **Evidencia Empírica**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde documentamos cómo un agente cae en *"La Ilusión de TDD"* y es bloqueado por el validador de CI.
+> 🔬 **Evidencia Empírica y Auditoría Hostil de IA**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde documentamos cómo un agente sin restricciones cae en *"La Ilusión de TDD"* y es bloqueado por las compuertas de CI.
+>
+> 📸 **Sometido a Estrés Adversarial en Vivo**: En lugar de confiar en promesas teóricas, esta plantilla fue sometida a pruebas adversariales hostiles en GitHub Codespaces mediante modelos de frontera (GitHub Copilot / GPT-6 Luna) con la instrucción explícita de romper el arnés y buscar exploits. Cada observación fue físicamente remediada y certificada con 0 vulnerabilidades (consulta el [Expediente de Auditorías](./docs/audit/README.md)).
+>
+> <p align="center">
+>   <img src="docs/assets/codespaces-adversarial-copilot-audit.png" alt="Auditoría Adversarial en Vivo en GitHub Codespaces" width="850"/>
+> </p>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -185,6 +191,9 @@ npm run verify:gates
 # 5. Ejecutar pruebas con cobertura separada de líneas y ramas
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
+
+# 6. Ejecutar auditoría ofensiva y red teaming automatizado de 10 dominios
+npm run audit:redteam
 ```
 
 ---

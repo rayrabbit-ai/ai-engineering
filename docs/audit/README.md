@@ -11,7 +11,8 @@ Este directorio consolida el expediente histórico de auditorías externas, revi
 | **2026-10-14** | [Auditoría Técnica Externa (Copilot GPT-6 Luna)](2026-10-14-auditoria-externa-copilot-luna.es.md) | Auditoría Externa de Afirmaciones y Bypasses Iniciales | Histórico | Bypasses encontrados (F-01 a F-05) |
 | **2026-10-14** | [Informe de Correcciones de Auditoría Inicial](2026-10-14-informe-correcciones.es.md) | Remediación Fase 1 (Branch Protection & Gates) | Resuelto | Mitigación inicial aplicada |
 | **2026-10-15** | [Auditoría Forense y Penetración Adversarial ASVS L3](auditoria-adversarial-forense-asvs-l3.es.md) | Red Team / Auditor Adversarial Ofensivo (OWASP ASVS L3) | Rigor Máximo | Identificados 10 vectores sutiles (F-01 a F-10) |
-| **2026-10-15** | [Certificación de Remediación Definitiva](certificacion-remediacion-final.es.md) | Certificación Física de Cierre de Brechas (Exit Code 0) | **Vigente** | **APROBADO — GRADO DE PRODUCCIÓN** |
+| **2026-10-15** | [Certificación de Remediación Definitiva](certificacion-remediacion-final.es.md) | Certificación Física de Cierre de Brechas (Exit Code 0) | Vigente | APROBADO — GRADO DE PRODUCCIÓN |
+| **2026-10-15** | [Informe Automatizado de Red Team (10 Dominios)](informe-redteam.es.md) | Suite Automatizada `redteam-audit.mjs` (Fuzzing Diferencial) | **Vigente** | **APROBADO (0 CRITICAL / HIGH)** |
 
 ---
 
@@ -53,4 +54,7 @@ pytest -m e2e --tb=short
 
 # Validación de especificaciones OpenSpec
 npm run spec:validate
+
+# Suite completa de Red Teaming y Fuzzing Diferencial (10 dominios)
+npm run audit:redteam
 ```

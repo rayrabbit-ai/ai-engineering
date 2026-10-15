@@ -133,12 +133,12 @@ export function isValidRefFormat(ref) {
  * Ejecutor seguro de Git sin shell para evitar CWE-78 (Command Injection).
  */
 export function runGit(args) {
-  try {
-    const res = spawnSync('git', args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
-    return res.status === 0 ? res.stdout.trim() : '';
-  } catch {
-    return '';
+  const res = spawnSync('git', args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+  if (res.status !== 0) {
+    const err = (res.stderr || '').trim() || (res.stdout || '').trim();
+    throw new Error(`Git command failed [git ${args.join(' ')}]: ${err}`);
   }
+  return res.stdout.trim();
 }
 
 export function runGitSafe(args) {

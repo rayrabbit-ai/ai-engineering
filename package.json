@@ -49,6 +49,7 @@
     "verify:red:py": "python scripts/verify_red_failure.py",
     "verify:red:py:self-test": "python scripts/verify_red_failure.py --self-test",
     "check:coverage:py": "python scripts/check_python_coverage.py",
+    "audit:redteam": "node scripts/redteam-audit.mjs --report docs/audit/informe-redteam.es.md",
     "guard": "node scripts/guard-agent.mjs",
     "prepare": "node scripts/guard-agent.mjs",
     "setup:branch-protection": "python scripts/setup_branch_protection.py"

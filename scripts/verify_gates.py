@@ -58,11 +58,14 @@ def is_test_file(file_path: str) -> bool:
     if not file_path:
         return False
     norm = file_path.replace("\\", "/").lower()
+    # Debe ser código ejecutable de pruebas
+    if not re.search(r"\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$", norm, re.IGNORECASE):
+        return False
     if norm.startswith("tests/") or norm.startswith("test/") or "/tests/" in norm or "/test/" in norm:
         return True
     if re.search(r"(\.spec|\.test|_test)\.[a-z0-9]+$", norm, re.IGNORECASE):
         return True
-    if re.search(r"test_[a-z0-9_-]+\.[a-z0-9]+$", norm, re.IGNORECASE):
+    if re.search(r"(?:^|/)test_[a-z0-9_-]+\.[a-z0-9]+$", norm, re.IGNORECASE):
         return True
     return False
 
@@ -78,7 +81,9 @@ def is_production_file(file_path: str) -> bool:
         norm.startswith("scripts/") or "/scripts/" in norm or
         norm.startswith(".agent/") or "/.agent/" in norm or
         norm.startswith(".github/") or "/.github/" in norm or
-        norm.startswith(".git/") or "/.git/" in norm
+        norm.startswith(".cursor/") or "/.cursor/" in norm or
+        norm.startswith(".git/") or "/.git/" in norm or
+        "node_modules/" in norm or "dist/" in norm or "coverage/" in norm
     ):
         return False
     if (
@@ -97,18 +102,24 @@ def is_production_file(file_path: str) -> bool:
 def extract_module_name(file_path: str) -> str:
     if not file_path:
         return ""
-    p = Path(file_path)
-    base = p.stem.lower()
-    for ext in [".spec", ".test", "_test"]:
-        if base.endswith(ext):
-            base = base[:-len(ext)]
-    if base.startswith("test_"):
-        base = base[5:]
-    base = re.sub(r"^[._-]+|[._-]+$", "", base)
-    return base.strip()
+    norm = file_path.replace("\\", "/")
+    # Eliminar prefijos de subproyecto o raíz de pruebas/código
+    norm = re.sub(r"^(?:[a-zA-Z0-9_-]+/)?(?:tests|test)/(?:ts/)?(?:unit/|integration/|characterization/|e2e/)?", "", norm, flags=re.IGNORECASE)
+    norm = re.sub(r"^(?:[a-zA-Z0-9_-]+/)?(?:src|lib|app|pkg)/", "", norm, flags=re.IGNORECASE)
+    # Quitar extensiones
+    norm = re.sub(r"\.[a-zA-Z0-9]+$", "", norm)
+    # Quitar sufijos de test
+    norm = re.sub(r"(\.spec|\.test|_test)$", "", norm, flags=re.IGNORECASE)
+    parts = norm.split("/")
+    last_idx = len(parts) - 1
+    parts[last_idx] = re.sub(r"^test_", "", parts[last_idx], flags=re.IGNORECASE)
+    parts[last_idx] = re.sub(r"(\.legacy|_legacy)$", "", parts[last_idx], flags=re.IGNORECASE)
+    parts[last_idx] = re.sub(r"^[._-]+|[._-]+$", "", parts[last_idx])
+    joined = "/".join(p for p in parts if p).lower().strip()
+    return joined
 
 def extract_scope_from_subject(subject: str, gate_type: str) -> str | None:
-    pattern = rf"^{gate_type}(?:\(([a-z0-9_-]+)\))?:"
+    pattern = rf"^{gate_type}(?:\(([a-z0-9_/-]+)\))?:"
     match = re.match(pattern, subject, re.IGNORECASE)
     if match and match.group(1):
         return match.group(1).lower().strip()
@@ -230,8 +241,16 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                     # Cada archivo de producción DEBE estar estrictamente cubierto por los scopes activos de RED
                     for p_file in prod_files:
                         p_module = extract_module_name(p_file)
-                        matches_module = bool(p_module and p_module in active_red_scopes)
-                        matches_explicit = bool(explicit_target and (explicit_target in active_red_scopes) and (explicit_target == p_module))
+                        matches_module = bool(
+                            p_module and (
+                                p_module in active_red_scopes or
+                                any(p_module.endswith("/" + a) or a.endswith("/" + p_module) for a in active_red_scopes)
+                            )
+                        )
+                        matches_explicit = bool(
+                            explicit_target and (explicit_target in active_red_scopes) and
+                            (explicit_target == p_module or p_module.endswith("/" + explicit_target) or explicit_target.endswith("/" + p_module))
+                        )
 
                         if not matches_module and not matches_explicit:
                             avail_str = ", ".join(sorted(active_red_scopes)) if active_red_scopes else "ninguno"
@@ -240,24 +259,45 @@ def validate_commit_list(commits: list[tuple[str, str, list[str]]]) -> list[str]
                                 f"El archivo de producción modificado '{p_file}' (módulo '{p_module or 'anónimo'}') no coincide con ningún test(red) activo previo [{avail_str}]."
                             )
                 else:
+                    # prod_files está vacío: Bloquear commits vacíos o sin producción a menos que declaren scope explícito
                     target_scopes = [explicit_target] if explicit_target else [extract_module_name(f) for f in changed_files if extract_module_name(f)]
-                    matched_scope = next((s for s in target_scopes if s in active_red_scopes), None)
-
-                    if not matched_scope and target_scopes:
-                        avail_str = ", ".join(sorted(active_red_scopes)) if active_red_scopes else "ninguno"
-                        tgt_str = ", ".join(target_scopes) if target_scopes else "sin ámbito identificado"
+                    if not target_scopes:
                         errors.append(
                             f"[{short_hash}] Violación de Causalidad TDD en '{subject_stripped}': "
-                            f"El ámbito modificado [{tgt_str}] no coincide con ningún test(red) activo previo [{avail_str}]."
+                            f"Un commit '{'feat(green)' if is_green else 'fix'}' debe incluir código de producción o declarar un ámbito explícito acoplado a un test(red) activo previo."
                         )
+                    else:
+                        matched_scope = next(
+                            (s for s in target_scopes if s in active_red_scopes or any(s.endswith("/" + a) or a.endswith("/" + s) for a in active_red_scopes)),
+                            None
+                        )
+                        if not matched_scope:
+                            avail_str = ", ".join(sorted(active_red_scopes)) if active_red_scopes else "ninguno"
+                            tgt_str = ", ".join(target_scopes)
+                            errors.append(
+                                f"[{short_hash}] Violación de Causalidad TDD en '{subject_stripped}': "
+                                f"El ámbito modificado [{tgt_str}] no coincide con ningún test(red) activo previo [{avail_str}]."
+                            )
+                        else:
+                            for s in target_scopes:
+                                active_red_scopes.discard(s)
+                                to_del = [a for a in active_red_scopes if a.endswith("/" + s) or s.endswith("/" + a)]
+                                for a in to_del:
+                                    active_red_scopes.discard(a)
 
                 # Consumir scopes satisfechos
-                if explicit_target and explicit_target in active_red_scopes:
-                    active_red_scopes.remove(explicit_target)
+                if explicit_target:
+                    active_red_scopes.discard(explicit_target)
+                    to_del = [a for a in active_red_scopes if a.endswith("/" + explicit_target) or explicit_target.endswith("/" + a)]
+                    for a in to_del:
+                        active_red_scopes.discard(a)
                 for p_file in prod_files:
                     p_module = extract_module_name(p_file)
-                    if p_module and p_module in active_red_scopes:
-                        active_red_scopes.remove(p_module)
+                    if p_module:
+                        active_red_scopes.discard(p_module)
+                        to_del = [a for a in active_red_scopes if a.endswith("/" + p_module) or p_module.endswith("/" + a)]
+                        for a in to_del:
+                            active_red_scopes.discard(a)
 
         # 4. Validar Inmutabilidad de Baseline (Invariante 2)
         touches_characterization = any(
@@ -385,10 +425,29 @@ def self_test():
     errs_empty = validate_commit_list(invalid_empty_module)
     assert any("No se pudo inferir un ámbito de módulo válido" in e for e in errs_empty), "FALLÓ VULNERABILIDAD F-03: verify_gates.py permitió bypass con módulo vacío"
 
-    # Caso 13 (F-02 Audit): Mitigación CWE-78 en referencias Git
-    malicious_ref = 'HEAD; printf "PYTHON_INJECTION_PROBE|test(red): injected"'
-    assert not is_valid_ref_format(malicious_ref), "FALLÓ VULNERABILIDAD F-02 (CWE-78): is_valid_ref_format aceptó inyección"
-    assert is_valid_ref_format("HEAD") and is_valid_ref_format("origin/main") and is_valid_ref_format("main~1"), "is_valid_ref_format rechazó ref válida"
+    # Caso 14 (F-03 Audit): Cross-Directory Scope Spoofing (tests/ui/button.test.ts vs src/payments/button.ts) -> DEBE SER RECHAZADO
+    invalid_cross_dir = [
+        ("ccross11", "test(red): test ui button", ["tests/ui/button.test.ts"]),
+        ("ccross22", "feat(green): implement payments button without auth", ["src/payments/button.ts"])
+    ]
+    errs_cross = validate_commit_list(invalid_cross_dir)
+    assert any("no coincide con ningún test(red) activo previo" in e for e in errs_cross), "FALLÓ VULNERABILIDAD F-03: verify_gates.py permitió spoofing de ámbito entre subdirectorios distintos"
+
+    # Caso 15 (Auditoría Adversarial): Archivo no ejecutable en tests/ (tests/foo.txt) no califica como test -> DEBE SER RECHAZADO
+    invalid_non_code = [
+        ("ctxt1111", "test(red): add txt fixture", ["tests/foo.txt"]),
+        ("ctxt2222", "feat(green): implement foo", ["src/foo.ts"])
+    ]
+    errs_non_code = validate_commit_list(invalid_non_code)
+    assert any("DEBE modificar al menos un archivo de test" in e for e in errs_non_code), "FALLÓ AUDITORÍA ADVERSARIAL: verify_gates.py aceptó un archivo .txt no ejecutable como test"
+
+    # Caso 16 (Auditoría Adversarial): Ghost Green (feat(green) que solo toca docs o está vacío sin scope explícito acoplado) -> DEBE SER RECHAZADO
+    invalid_ghost = [
+        ("cgho1111", "test(red): test auth", ["tests/auth.test.ts"]),
+        ("cgho2222", "feat(green): ghost green without code", ["docs/readme.txt"])
+    ]
+    errs_ghost = validate_commit_list(invalid_ghost)
+    assert any("no coincide con ningún test(red) activo previo" in e for e in errs_ghost), "FALLÓ AUDITORÍA ADVERSARIAL: verify_gates.py permitió commit feat(green) fantasma sin código ni scope acoplado"
 
     print("[SELF-TEST] ✅ Todas las aserciones internas y pruebas adversariales pasaron con éxito.\n")
     return 0

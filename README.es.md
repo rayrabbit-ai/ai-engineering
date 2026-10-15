@@ -171,14 +171,18 @@ Consulta [`QUICKSTART.es.md`](./QUICKSTART.es.md) para comenzar en 3 minutos.
 git clone https://github.com/rayrabbit-ai/ai-engineering.git mi-proyecto
 cd mi-proyecto
 
-# 2. Instalar dependencias (Node y Python)
-npm install
-pip install -e .[test]
+# 2. Instalar dependencias fijadas (Node y Python)
+npm ci
+python -m pip install -r requirements-test.txt
+python -m pip install --no-deps --no-build-isolation -e .
 
-# 3. Auditar compuertas de commits en cualquier momento
+# 3. Activar el bloqueo físico de rama en GitHub (1 comando)
+npm run setup:branch-protection
+
+# 4. Auditar compuertas de commits en cualquier momento
 npm run verify:gates
 
-# 4. Ejecutar pruebas con cobertura separada de líneas y ramas
+# 5. Ejecutar pruebas con cobertura separada de líneas y ramas
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
 ```
@@ -186,6 +190,7 @@ npm run test:py:coverage     # Python
 ---
 
 ## 7. Documentación Adicional
+* [Expediente de Seguridad y Auditorías Adversariales (Certificación OWASP ASVS L3)](./docs/audit/README.md)
 * [Branch Protection en GitHub y Bloqueo Físico de Merges](./docs/BRANCH_PROTECTION.md)
 * [Caso de Estudio: Benchmark A/B en Vivo y Guía de Cobertura](./docs/ab-testing-and-coverage.es.md)
 * [Manual Operativo y Secuencias de Prompts (P0 - P11)](./MANUAL_OPERATIVO.es.md)

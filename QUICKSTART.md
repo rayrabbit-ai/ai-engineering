@@ -21,21 +21,36 @@ cd my-new-project
 
 ## Step 2: Install Dependencies
 
-### If your stack is TypeScript / Node.js:
+### TypeScript / Node.js:
 ```bash
-npm install
+npm ci
 npm run test:ts:coverage
 ```
 
-### If your stack is Python:
+### Python:
 ```bash
-pip install -e .[test]
+python -m pip install -r requirements-test.txt
+python -m pip install --no-deps --no-build-isolation -e .
 npm run test:py:coverage
 ```
 
 ---
 
-## Step 3: Your First SDD + TDD Cycle with the Agent
+## Step 3: Enable Physical Branch Protection (1 Command)
+
+GitHub templates do not copy branch protection automatically. To activate physical merge blocking on `main` and enforce required status checks:
+
+```bash
+# Option A: Automatic via GitHub CLI (recommended)
+npm run setup:branch-protection
+
+# Option B: Via GitHub Web Settings
+# Follow the step-by-step guide in docs/BRANCH_PROTECTION.md
+```
+
+---
+
+## Step 4: Your First SDD + TDD Cycle with the Agent
 
 Open your preferred AI coding assistant (Google Antigravity, Cursor, Claude Code, Roo Code, Copilot):
 
@@ -43,7 +58,7 @@ Open your preferred AI coding assistant (Google Antigravity, Cursor, Claude Code
    Add or edit a spec in `openspec/specs/<capability>/spec.md` with Given/When/Then scenarios.
    Validate with:
    ```bash
-   npx @fission-ai/openspec validate --all
+   npm run spec:validate
    ```
 
 2. **Execute Triage**:
@@ -63,15 +78,14 @@ Open your preferred AI coding assistant (Google Antigravity, Cursor, Claude Code
 4. **Verify Gates Before Pushing**:
    Before opening a PR, run the deterministic gate audit:
    ```bash
-   # Node.js validator
+   # Node.js gate validator
    npm run verify:gates
 
-   # Python validator
+   # Python gate validator
    npm run verify:gates:py
 
-   # Or the full pre-push adversarial audit
+   # Or the full pre-push adversarial audit workflow
    /opsx-audit
    ```
-   The gate auditor ensures your commits obey scope-coupled TDD causality, that legacy baselines remain intact, and that master specifications are not tampered with directly.
 
-You are done! When opening a Pull Request on GitHub, `.github/workflows/gate-validator.yml` automatically enforces these gates.
+When opening a Pull Request on GitHub, `.github/workflows/gate-validator.yml` automatically verifies all commit gates, coverage thresholds, and specification schemas before GitHub allows the merge.

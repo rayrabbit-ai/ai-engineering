@@ -31,6 +31,7 @@ jobs:
       - name: Autochequeo de Reglas Adversariales y Causalidad (Self-Test)
         run: |
           node scripts/verify-gates.mjs --self-test
+          node scripts/verify-red-failure.mjs --self-test
 
       - name: Verificación de Integridad de Agentes y Auditor Adversarial (Guard)
         run: |
@@ -38,10 +39,12 @@ jobs:
 
       - name: Bloqueo de alteración no autorizada de compuertas en PR (F-01)
         if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'allow-gate-update')
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          MODIFIED_GATES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(\.github/workflows/|scripts/verify|scripts/guard|\.agent/rules/)' || true)
+          MODIFIED_GATES=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -E '(^|/)(\.github/workflows/|scripts/|\.agent/rules/|\.agent/workflows/|package\.json|package-lock\.json|pyproject\.toml|requirements)' || true)
           if [ -n "$MODIFIED_GATES" ]; then
-            echo "❌ [GATE-SECURITY-FAIL] El PR modifica compuertas, reglas o workflows críticos:"
+            echo "❌ [GATE-SECURITY-FAIL] El PR modifica compuertas, reglas, dependencias o workflows críticos:"
             echo "$MODIFIED_GATES"
             echo "Para modificar contratos centrales, un maintainer debe etiquetar el PR con 'allow-gate-update'."
             exit 1
@@ -103,6 +106,9 @@ jobs:
       - name: Tests Unitarios e Integración con Cobertura Mínima (Líneas ≥80%, Ramas ≥75%)
         run: npm run test:ts:coverage
 
+      - name: Suite E2E en Runtime Real TypeScript (Invariante 15)
+        run: npm run test:ts:e2e
+
   test-python:
     name: "Suite Python & Cobertura"
     runs-on: ubuntu-latest
@@ -127,6 +133,7 @@ jobs:
       - name: Autochequeo de Compuertas Adversariales (Python Self-Test)
         run: |
           python scripts/verify_gates.py --self-test
+          python scripts/verify_red_failure.py --self-test
 
       - name: Validar Nomenclatura y Causalidad TDD (Python History Audit)
         env:

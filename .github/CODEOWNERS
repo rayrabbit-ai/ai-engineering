@@ -15,3 +15,11 @@ scripts/ @rayrabbit-ai
 
 # Protect specification governance
 openspec/specs/ @rayrabbit-ai
+
+# Protect critical dependencies and project configurations
+package.json @rayrabbit-ai
+package-lock.json @rayrabbit-ai
+pyproject.toml @rayrabbit-ai
+requirements-test.txt @rayrabbit-ai
+tsconfig.json @rayrabbit-ai
+vitest.config.ts @rayrabbit-ai

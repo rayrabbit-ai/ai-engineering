@@ -171,14 +171,18 @@ See [`QUICKSTART.md`](./QUICKSTART.md) to get started in 3 minutes.
 git clone https://github.com/rayrabbit-ai/ai-engineering.git my-project
 cd my-project
 
-# 2. Install dependencies (Node & Python)
-npm install
-pip install -e .[test]
+# 2. Install pinned dependencies (Node & Python)
+npm ci
+python -m pip install -r requirements-test.txt
+python -m pip install --no-deps --no-build-isolation -e .
 
-# 3. Audit commit gates at any time
+# 3. Enable physical branch protection on GitHub (1 command)
+npm run setup:branch-protection
+
+# 4. Audit commit gates at any time
 npm run verify:gates
 
-# 4. Run tests with separate line & branch coverage
+# 5. Run tests with separate line & branch coverage
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
 ```
@@ -186,8 +190,10 @@ npm run test:py:coverage     # Python
 ---
 
 ## 7. Additional Documentation
+* [Security & Adversarial Audit Dossier (OWASP ASVS L3 Certified)](./docs/audit/README.md)
 * [GitHub Branch Protection & Physical Merge Blocking](./docs/BRANCH_PROTECTION.md)
 * [Empirical A/B Benchmark Case Study & Coverage Guide](./docs/ab-testing-and-coverage.md)
 * [Operational Manual and Prompt Sequences (P0 - P11)](./OPERATIONAL_MANUAL.md)
+
 * [The 15 Universal Invariants](.agent/rules/INVARIANTS.md)
 * [Pre-Code SDD Gate](.agent/rules/SDD_GATE.md)

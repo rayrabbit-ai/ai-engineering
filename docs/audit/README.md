@@ -1,34 +1,42 @@
-# RayRabbit AI Engineering — Auditorías de Seguridad y Resiliencia
+# RayRabbit AI Engineering — Expediente de Auditorías
 
-Este directorio consolida el expediente histórico de auditorías externas, revisiones adversariales independientes y certificaciones de cumplimiento de seguridad de grado bancario/militar para el arnés determinista de **RayRabbit AI Engineering**.
-
----
-
-## 📂 Expediente de Auditorías y Certificaciones
-
-| Fecha | Documento | Tipo / Autor | Estado | Veredicto |
-| :--- | :--- | :--- | :--- | :--- |
-| **2026-10-14** | [Auditoría Técnica Externa (Copilot GPT-6 Luna)](2026-10-14-auditoria-externa-copilot-luna.es.md) | Auditoría Externa de Afirmaciones y Bypasses Iniciales | Histórico | Bypasses encontrados (F-01 a F-05) |
-| **2026-10-14** | [Informe de Correcciones de Auditoría Inicial](2026-10-14-informe-correcciones.es.md) | Remediación Fase 1 (Branch Protection & Gates) | Resuelto | Mitigación inicial aplicada |
-| **2026-10-15** | [Auditoría Forense y Penetración Adversarial ASVS L3](auditoria-adversarial-forense-asvs-l3.es.md) | Red Team / Auditor Adversarial Ofensivo (OWASP ASVS L3) | Rigor Máximo | Identificados 10 vectores sutiles (F-01 a F-10) |
-| **2026-10-15** | [Auditoría Forense Adversarial Externa](2026-10-15-auditoria-forense-adversarial.es.md) | Auditoría Externa Independiente de Causalidad y Replay | Rigor Máximo | Identificados 5 vectores de causalidad (F-01 a F-05) |
-| **2026-10-15** | [Certificación de Remediación Definitiva](certificacion-remediacion-final.es.md) | Certificación Física de Cierre de Brechas (Exit Code 0) | Vigente | APROBADO — GRADO DE PRODUCCIÓN |
-| **2026-10-15** | [Informe Automatizado de Red Team (10 Dominios)](informe-redteam.es.md) | Suite Automatizada `redteam-audit.mjs` (Fuzzing Diferencial) | **Vigente** | **APROBADO (0 CRITICAL / HIGH)** |
+Este directorio reúne las auditorías externas y adversariales del harness y el estado de remediación de cada hallazgo. **Ningún documento de este expediente es una certificación formal** (OWASP, SLSA ni ninguna otra).
 
 ---
 
-## 🛡️ Estándares y Marcos de Referencia Aplicados
+## 📂 Expediente de Auditorías
 
-1. **OWASP ASVS L3 (Application Security Verification Standard Level 3):**
-   - El nivel más alto de rigor para aplicaciones críticas, transaccionales y de defensa.
-2. **OWASP Top 10 CI/CD Security Risks:**
-   - Mitigación absoluta de Poisoned Pipeline Execution (PPE), Dependency Chain Abuse e Insufficient Flow Control.
-3. **MITRE ATT&CK & MITRE ATLAS:**
-   - Defensa en profundidad ante manipulación de modelos de lenguaje, inyección de prompts y envenenamiento de agentes de software.
-4. **SLSA Nivel 3 (Supply-chain Levels for Software Artifacts):**
-   - Inmutabilidad de dependencias, scripts de construcción aislados y auditoría de procedencia de código.
-5. **Causalidad TDD Estricta y Determinismo Criptográfico:**
-   - Verificación mecánica de commits previa a cualquier cambio en código fuente de producción.
+| Fecha | Documento | Tipo | Estado |
+| :--- | :--- | :--- | :--- |
+| 2026-10-14 | [Auditoría Técnica Externa](2026-10-14-auditoria-externa-copilot-luna.es.md) | Externa (claims y bypasses iniciales) | Histórico |
+| 2026-10-14 | [Informe de Correcciones](2026-10-14-informe-correcciones.es.md) | Remediación fase 1 | Histórico |
+| 2026-10-15 | [Auditoría adversarial interna](auditoria-adversarial-forense-asvs-l3.es.md) | Interna; el nombre del archivo menciona ASVS L3, pero **no** es una verificación ASVS | Histórico |
+| 2026-10-15 | [Auditoría Forense Adversarial Externa](2026-10-15-auditoria-forense-adversarial.es.md) | Externa (causalidad y replay) | Histórico |
+| 2026-10-15 | [Certificación de remediación](certificacion-remediacion-final.es.md) | Interna; **superada** por la auditoría independiente siguiente | Superado |
+| 2026-10-15 | [Informe forense independiente](2026-10-15-informe-forense-independiente.es.md) | Externa e independiente: **RECHAZADO** el claim de certificación; aprobación condicionada como plantilla SDD/TDD | **Vigente** — ver estado abajo |
+| 2026-10-15 | [Informe de la batería heurística](informe-redteam.es.md) | Automático (`redteam-audit.mjs`, 12 probes) | Vigente |
+
+### Estado de los hallazgos de la auditoría independiente
+
+| ID | Hallazgo | Estado |
+| :--- | :--- | :--- |
+| F-01 | El replay aceptaba como RED un fallo sin aserción | **Corregido.** `classifyTestResult` exige evidencia de aserción y `assertLegitimateRed` bloquea; hay self-tests de regresión (casos 6–9). Además se corrigió un fallo *fail-open* que no figuraba en el informe: el patch se corrompía por un `trim()` y el replay omitía el commit en silencio. Ahora bloquea. |
+| F-02 | D9 reportaba un falso umbral combinado de ramas en Python | **Corregido.** D9 reconoce `check_python_coverage.py --min-branches`. |
+| F-03 | Afirmaciones de capacidades sin método que las respalde | **Corregido en documentación.** Se eliminaron los claims de certificación (ver "Alcance"). |
+| F-04 | Branch protection no verificable (HTTP 403) | **Pendiente:** requiere verificación manual del propietario en *Settings → Branches*. |
+| F-05 | Colisión `auth`/`billing/auth` | No reproducible en HEAD; se mantiene como caso de regresión en los self-tests. |
+
+---
+
+## ⚖️ Alcance: qué es y qué no es
+
+**Sí es:** una plantilla SDD/TDD con gates de commit verificados en CI (nomenclatura, acoplamiento de scope RED→GREEN, linkage con OpenSpec, replay del RED en el commit padre), cobertura de líneas y ramas con umbrales independientes (TS y Python), y una batería heurística de chequeos de seguridad.
+
+**No es:**
+- Una certificación ni una verificación conforme a OWASP ASVS L3, SLSA L3, MITRE ATT&CK/ATLAS ni CVSS.
+- Análisis de taint, fuzzing generativo, mutation testing ni auditoría de memoria/HTTP. Los "dominios" de `redteam-audit.mjs` son chequeos puntuales con nombres temáticos.
+- Provenance/attestation de artefactos (para eso ver in-toto/Witness).
+- Un bloqueo físico de merge por sí solo: depende de que branch protection exija los checks.
 
 ---
 
@@ -62,6 +70,6 @@ pytest -m e2e --tb=short
 # Validación de especificaciones OpenSpec
 npm run spec:validate
 
-# Suite completa de Red Teaming y Fuzzing Diferencial (10 dominios)
+# Batería heurística de chequeos de seguridad (no es certificación)
 npm run audit:redteam
 ```

@@ -74,28 +74,51 @@ export function classifyTestResult(exitCode, stdout = '', stderr = '') {
     }
   }
 
-  // 3. Fallo legítimo de aserción (TDD RED genuino)
+  // 3. Fallo legítimo de aserción (TDD RED genuino).
+  // Solo evidencia específica de aserción: 'FAIL ' / 'expect(' aparecen también ante crashes de runtime.
   const assertionPatterns = [
-    'AssertionError',
-    'assert ',
-    'expect(',
-    'Assertion failed',
-    'FAILED (failures=',
-    'FAIL ',
-    'Expected:',
-    'Received:',
-    'Difference:',
+    /AssertionError/,
+    /Assertion failed/,
+    /FAILED \(failures=/,
+    /^E\s+assert /m,
+    /^\s*[-+]?\s*Expected:/m,
+    /^\s*[-+]?\s*Received:/m,
   ];
-  const hasAssertion = assertionPatterns.some((pat) => combined.includes(pat));
+  const hasAssertion = assertionPatterns.some((re) => re.test(combined));
+
+  if (!hasAssertion) {
+    // F-01: un exit code != 0 sin evidencia de aserción (Error/TypeError/crash) NO es RED legítimo
+    return {
+      isRed: false,
+      isFraud: false,
+      hasAssertion: false,
+      isNonAssertive: true,
+      reason: 'El runner falló sin evidencia de aserción no satisfecha (excepción de runtime o crash). No es un RED legítimo.',
+    };
+  }
 
   return {
     isRed: true,
     isFraud: false,
-    hasAssertion,
-    reason: hasAssertion
-      ? 'Fallo físico legítimo por aserción no satisfecha.'
-      : 'El runner devolvió código de error sin error de sintaxis.',
+    hasAssertion: true,
+    reason: 'Fallo físico legítimo por aserción no satisfecha.',
   };
+}
+
+/**
+ * Punto único de decisión: todo lo que no sea un RED por aserción legítima bloquea (fail-closed).
+ */
+export function assertLegitimateRed(outcome, shortHash, subject, lang) {
+  if (outcome.isFraud) {
+    throw new Error(`❌ [FRAUDE-TDD] En ${shortHash} ('${subject}'): ${outcome.reason}`);
+  }
+  if (outcome.isSyntaxError) {
+    throw new Error(`❌ [TEST-INVALIDO] En ${shortHash} ('${subject}'): ${outcome.reason}`);
+  }
+  if (!outcome.isRed || !outcome.hasAssertion) {
+    throw new Error(`❌ [RED-NO-ASERTIVO] En ${shortHash} ('${subject}'): ${outcome.reason}`);
+  }
+  console.log(`  ✅ [${shortHash}] ${lang} RED verificado: fallo por aserción no satisfecha en el commit padre.`);
 }
 
 /**
@@ -140,6 +163,39 @@ export function selfTest() {
   );
   if (!resPytestRed.isRed || !resPytestRed.hasAssertion) {
     throw new Error('FALLÓ SELF-TEST: No reconoció fallo legítimo de aserción en Pytest.');
+  }
+
+  // Caso 6 (F-01 auditoría independiente): excepción genérica sin aserción NO es RED legítimo
+  const resRuntime = classifyTestResult(1, 'Error: deliberate runtime failure before any assertion', '');
+  if (resRuntime.isRed || resRuntime.hasAssertion || !resRuntime.isNonAssertive) {
+    throw new Error('FALLÓ SELF-TEST: Aceptó como RED una excepción genérica sin aserción (F-01).');
+  }
+
+  // Caso 7: TypeError en runtime tampoco es RED legítimo
+  const resTypeErr = classifyTestResult(1, "TypeError: Cannot read properties of undefined (reading 'x')", '');
+  if (resTypeErr.isRed) {
+    throw new Error('FALLÓ SELF-TEST: Aceptó como RED un TypeError de runtime (F-01).');
+  }
+
+  // Caso 8: Vitest imprime 'FAIL' ante un crash; sin AssertionError no es RED
+  const resVitestCrash = classifyTestResult(
+    1,
+    " FAIL  tests/calc.test.ts > add\nTypeError: add is not a function\n ❯ tests/calc.test.ts:5:12\n    expect(add(1, 2)).toBe(3)",
+    ''
+  );
+  if (resVitestCrash.isRed) {
+    throw new Error('FALLÓ SELF-TEST: Aceptó como RED un crash de Vitest con cabecera FAIL (F-01).');
+  }
+
+  // Caso 9: el punto de decisión del caller DEBE bloquear resultados no asertivos
+  let blocked = false;
+  try {
+    assertLegitimateRed(resRuntime, 'abc1234', 'test(red): x', 'TS');
+  } catch (e) {
+    blocked = /RED-NO-ASERTIVO/.test(e.message);
+  }
+  if (!blocked) {
+    throw new Error('FALLÓ SELF-TEST: assertLegitimateRed no bloqueó un fallo sin aserción (F-01).');
   }
 
   console.log('[SELF-TEST] ✅ Todas las pruebas internas del motor de Replay pasaron con éxito.\n');
@@ -201,8 +257,15 @@ export function verifyHistoricalReplay(baseRef, headRef) {
     try {
       runGit(['worktree', 'add', '--detach', tempDir, parentSha]);
 
-      // Extraer diff de tests del commit RED y aplicarlo sobre el código padre
-      const diffPatch = runGit(['diff', `${rc.hash}^`, rc.hash, '--', ...testFiles]);
+      // Extraer diff de tests del commit RED SIN trim(): recortar el '\n' final corrompe el patch
+      const diffRes = spawnSync('git', ['diff', '--binary', `${rc.hash}^`, rc.hash, '--', ...testFiles], {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+      });
+      if (diffRes.status !== 0) {
+        throw new Error(`❌ [REPLAY-NO-REPRODUCIBLE] En ${shortHash}: git diff falló: ${(diffRes.stderr || '').trim()}`);
+      }
+      const diffPatch = diffRes.stdout;
       if (diffPatch.trim()) {
         const applyRes = spawnSync('git', ['apply', '--whitespace=nowarn'], {
           cwd: tempDir,
@@ -210,40 +273,32 @@ export function verifyHistoricalReplay(baseRef, headRef) {
           encoding: 'utf8',
         });
         if (applyRes.status !== 0) {
-          console.warn(`[REPLAY-WARN] No se pudo aplicar parche limpio en ${shortHash}, omitiendo replay directo.`);
-          continue;
+          // Fail-closed: si no se puede reproducir, NO se puede afirmar que el RED fue legítimo
+          throw new Error(
+            `❌ [REPLAY-NO-REPRODUCIBLE] En ${shortHash} ('${rc.subject}'): git apply falló sobre el padre: ${(applyRes.stderr || '').trim()}`
+          );
         }
       }
 
       // Ejecutar runner correspondiente
       const hasTsTests = testFiles.some((f) => /\.(ts|js|mjs|cjs)$/.test(f));
       const hasPyTests = testFiles.some((f) => /\.py$/.test(f));
+      if (!hasTsTests && !hasPyTests) {
+        throw new Error(`❌ [REPLAY-SIN-RUNNER] En ${shortHash}: ningún archivo de test ejecutable (.ts/.js/.py) en [${testFiles.join(', ')}].`);
+      }
 
       if (hasTsTests) {
-        const vitestBin = path.join(ROOT_DIR, 'node_modules/.bin/vitest');
-        if (fs.existsSync(vitestBin)) {
-          const runRes = spawnSync('node', [vitestBin, 'run', ...testFiles], { cwd: tempDir, encoding: 'utf8' });
-          const outcome = classifyTestResult(runRes.status, runRes.stdout, runRes.stderr);
-          if (outcome.isFraud) {
-            throw new Error(`❌ [FRAUDE-TDD] En ${shortHash} ('${rc.subject}'): ${outcome.reason}`);
-          }
-          if (outcome.isSyntaxError) {
-            throw new Error(`❌ [TEST-INVALIDO] En ${shortHash} ('${rc.subject}'): ${outcome.reason}`);
-          }
-          console.log(`  ✅ [${shortHash}] TS RED Físico Verificado: AssertionError legítima confirmada.`);
+        const vitestBin = path.join(ROOT_DIR, 'node_modules', 'vitest', 'vitest.mjs');
+        if (!fs.existsSync(vitestBin)) {
+          throw new Error(`❌ [REPLAY-SIN-RUNNER] En ${shortHash}: vitest no instalado (${vitestBin}). Ejecute 'npm ci'.`);
         }
+        const runRes = spawnSync('node', [vitestBin, 'run', ...testFiles], { cwd: tempDir, encoding: 'utf8' });
+        assertLegitimateRed(classifyTestResult(runRes.status, runRes.stdout, runRes.stderr), shortHash, rc.subject, 'TS');
       }
 
       if (hasPyTests) {
         const pyRes = spawnSync('python', ['-m', 'pytest', '-q', ...testFiles], { cwd: tempDir, encoding: 'utf8' });
-        const outcomePy = classifyTestResult(pyRes.status, pyRes.stdout, pyRes.stderr);
-        if (outcomePy.isFraud) {
-          throw new Error(`❌ [FRAUDE-TDD] En ${shortHash} ('${rc.subject}'): ${outcomePy.reason}`);
-        }
-        if (outcomePy.isSyntaxError) {
-          throw new Error(`❌ [TEST-INVALIDO] En ${shortHash} ('${rc.subject}'): ${outcomePy.reason}`);
-        }
-        console.log(`  ✅ [${shortHash}] Python RED Físico Verificado: AssertionError legítima confirmada.`);
+        assertLegitimateRed(classifyTestResult(pyRes.status, pyRes.stdout, pyRes.stderr), shortHash, rc.subject, 'Python');
       }
     } finally {
       // Limpieza segura del worktree temporal

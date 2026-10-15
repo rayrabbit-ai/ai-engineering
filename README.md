@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Official RayRabbit AI Template Repository**  
-> *The first deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + strict TDD causality + dual-mode autonomy (Invariant vs HITL) to eliminate "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
+> *Deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + scope-coupled TDD commit causality + dual-mode autonomy (Invariant vs HITL) to curb "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
 
 ---
 
@@ -213,7 +213,7 @@ npm run audit:redteam
 ---
 
 ## 7. Additional Documentation
-* [Security & Adversarial Audit Dossier (OWASP ASVS L3 Certified)](./docs/audit/README.md)
+* [Security & Adversarial Audit Dossier](./docs/audit/README.md)
 * [GitHub Branch Protection & Physical Merge Blocking](./docs/BRANCH_PROTECTION.md)
 * [Empirical A/B Benchmark Case Study & Coverage Guide](./docs/ab-testing-and-coverage.md)
 * [Operational Manual and Prompt Sequences (P0 - P11)](./OPERATIONAL_MANUAL.md)

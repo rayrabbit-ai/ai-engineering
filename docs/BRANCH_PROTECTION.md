@@ -1,60 +1,65 @@
 # GitHub Branch Protection & CI Enforcement Guide
 
-> **Mecanismo de Bloqueo Físico de Merges (Physical Enforcement)**  
-> Este documento detalla la relación entre los validadores de CI de RayRabbit AI Engineering y las reglas de protección de rama de GitHub.
+[English](BRANCH_PROTECTION.md) | [Español](BRANCH_PROTECTION.es.md)
+
+> **Physical Merge Blocking Mechanism**  
+> This document details the interaction between RayRabbit AI Engineering CI validators and GitHub repository branch protection rulesets.
 
 ---
 
-## 1. El Principio de Enforcement en Dos Capas
+## 1. Two-Layer Enforcement Architecture
 
-Para garantizar que ningún código de agente autónomo pueda fusionarse si viola las compuertas deterministas, el sistema opera en dos capas complementarias:
+To guarantee that no autonomous AI agent can merge code that violates deterministic gates, the system operates across two complementary layers:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       DOS CAPAS DE ENFORCEMENT DETERMINISTA                 │
+│                    TWO-LAYER DETERMINISTIC ENFORCEMENT                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-  [ CAPA 1: WORKFLOW DE CI (gate-validator.yml) ]
-     ├── Autochequeo de reglas adversariales (verify-gates.mjs --self-test)
-     ├── Guard de contratos e integridad de reglas (guard-agent.mjs)
-     ├── Auditoría de commits por compuerta (Causalidad TDD y aislamiento RED)
-     ├── Validación de especificaciones OpenSpec (openspec validate --all)
-     └── Suites de pruebas y cobertura (Líneas ≥80%, Ramas ≥75% en TS y Python)
+  [ LAYER 1: CI WORKFLOW (.github/workflows/gate-validator.yml) ]
+     ├── Self-test of adversarial rules (npm run verify:gates:self-test)
+     ├── Contract & rule integrity guard (node scripts/guard-agent.mjs)
+     ├── Commit causality audit (TDD strict causality & RED isolation)
+     ├── OpenSpec specification validation (openspec validate --all)
+     ├── Historical test replay in isolated worktree (scripts/verify-historical-replay.mjs)
+     ├── Polyglot test suites & coverage (Lines ≥80%, Branches ≥75% in TS & Python)
+     └── Heuristic security audit suite (npm run audit:redteam)
            │
-           ▼ Produce estado: Pass / Fail
-  [ CAPA 2: BRANCH PROTECTION (GitHub Repository Rulesets / Protection) ]
-     └── Bloqueo FÍSICO del botón de Merge: GitHub rechaza cualquier PR
-         si alguno de los status checks requeridos no finalizó en estado Pass.
+           ▼ Produces commit status: Pass / Fail
+  [ LAYER 2: BRANCH PROTECTION (GitHub Rulesets / Branch Protection) ]
+     └── PHYSICAL BLOCKING of the Merge button: GitHub declines any PR
+         if any of the required status checks have not completed successfully.
 ```
 
 ---
 
-## 2. Checks Requeridos Obligatorios
+## 2. Mandatory Required Status Checks
 
-En la configuración del repositorio en GitHub (`Settings` -> `Branches` -> `Branch protection rules` o `Rulesets`), los siguientes checks deben marcarse como **Required** en la rama `main`:
+In repository settings on GitHub (`Settings` -> `Branches` -> `Branch protection rules` or `Rulesets`), the following checks MUST be configured as **Required** on the `main` branch:
 
-| Job / Rule en GitHub | Finalidad del Bloqueo |
+| Status Check Name in GitHub | Enforcement Objective |
 |---|---|
-| `Auditoría de Commits por Compuerta (Invariantes 1 y 3)` | Rechaza PRs si hay GREEN sin RED previo, contrabando multirruta o código en RED |
-| `Validación de Especificaciones OpenSpec` | Rechaza PRs si hay cambios de código sin spec aprobada o formato inválido |
-| `Suite TypeScript / Node.js & Cobertura` | Rechaza si fallan tests, se rompe @legacy-baseline o cobertura < 80% líneas / < 75% ramas |
-| `Suite Python & Cobertura` | Rechaza si fallan tests pytest, se rompe baseline o cobertura < 80% líneas / < 75% ramas |
-| `Require Pull Request Reviews` (≥1 review + CODEOWNERS) | Exige revisión humana obligatoria y aprobación de CODEOWNERS en compuertas y reglas |
+| `Auditoría de Commits por Compuerta (Invariantes 1 y 3)` | Rejects PRs containing GREEN without preceding RED, multi-path scope smuggling, or production code inside RED |
+| `Validación de Especificaciones OpenSpec` | Rejects PRs with missing active OpenSpec changes, unlinked tasks, or invalid schema formatting |
+| `Suite TypeScript / Node.js & Cobertura` | Rejects PRs if Vitest tests fail, legacy baseline breaks, or coverage < 80% lines / < 75% branches |
+| `Suite Python & Cobertura` | Rejects PRs if pytest tests fail, baseline breaks, or coverage < 80% lines / < 75% branches |
+| `Auditoría Ofensiva Red Team (10 Dominios ASVS L3)` | Rejects PRs if critical or high severity security vulnerabilities are discovered by the automated suite |
+| `Require Pull Request Reviews` (≥1 review + CODEOWNERS) | Enforces mandatory human code review and CODEOWNERS sign-off on gates, workflows, and rules |
 
 ---
 
-## 3. Configuración Automatizada en 1 Paso
+## 3. Automated Setup in 1 Step
 
-Puedes aplicar esta configuración automáticamente utilizando el script incluido:
+You can automatically apply this configuration using the included setup scripts:
 
-### Con Shell (Linux/macOS/Git Bash):
+### Using Shell (Linux / macOS / Git Bash):
 ```bash
 ./scripts/setup-branch-protection.sh rayrabbit-ai/ai-engineering main
 ```
 
-### Con Python (Multiplataforma Windows/Linux/macOS):
+### Using Python (Cross-platform Windows / Linux / macOS):
 ```bash
 python scripts/setup_branch_protection.py --repo rayrabbit-ai/ai-engineering --branch main
 ```
 
-*(Requiere GitHub CLI `gh auth login` con permisos de administración sobre el repositorio).*
+*(Requires GitHub CLI `gh auth login` with administrative permissions on the repository).*

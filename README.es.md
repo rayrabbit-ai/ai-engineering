@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Repositorio Template Oficial de RayRabbit AI**  
-> *The first deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + strict TDD causality + dual-mode autonomy (Invariant vs HITL) to eliminate "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
+> *Deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + scope-coupled TDD commit causality + dual-mode autonomy (Invariant vs HITL) to curb "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
 
 ---
 
@@ -36,7 +36,7 @@ Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven D
 
 > 🔬 **Evidencia Empírica y Auditoría Hostil de IA**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde documentamos cómo un agente sin restricciones cae en *"La Ilusión de TDD"* y es bloqueado por las compuertas de CI.
 >
-> 📸 **Sometido a Estrés Adversarial en Vivo**: En lugar de confiar en promesas teóricas, esta plantilla fue sometida a pruebas adversariales hostiles en GitHub Codespaces mediante modelos de frontera (GitHub Copilot / GPT-6 Luna) con la instrucción explícita de romper el arnés y buscar exploits. Cada observación fue físicamente remediada y certificada con 0 vulnerabilidades (consulta el [Expediente de Auditorías](./docs/audit/README.md)).
+> 📸 **Sometido a Estrés Adversarial en Vivo**: En lugar de confiar en promesas teóricas, esta plantilla fue sometida a pruebas adversariales hostiles en GitHub Codespaces mediante modelos de frontera (GitHub Copilot / GPT-6 Luna) con la instrucción explícita de romper el arnés y buscar exploits. Los hallazgos y su estado de remediación están documentados (consulta el [Expediente de Auditorías](./docs/audit/README.md)).
 >
 > <p align="center">
 >   <img src="docs/assets/codespaces-adversarial-copilot-audit.png" alt="Auditoría Adversarial en Vivo en GitHub Codespaces" width="850"/>
@@ -161,7 +161,7 @@ Este repositorio incluye puntos de entrada canónicos en la raíz para que los a
 │   ├── verify_red_failure.py    # Aserción física de fallo en fase RED (Python)
 │   ├── check_python_coverage.py # Verificador mecánico independiente de líneas y ramas
 │   ├── tdd-flow.mjs             # CLI de ergonomía TDD (tdd:red, tdd:green, tdd:refactor)
-│   ├── redteam-audit.mjs        # Motor automatizado de auditoría Red Team (10 dominios ASVS L3)
+│   ├── redteam-audit.mjs        # Batería heurística de chequeos de seguridad (12 probes; no es certificación)
 │   ├── guard-agent.mjs          # Guardián estructural y semántico de contratos
 │   ├── setup_branch_protection.py # Configuración automatizada de branch protection
 │   └── setup-branch-protection.sh # Script bash para branch protection
@@ -213,9 +213,9 @@ npm run audit:redteam
 ---
 
 ## 7. Documentación Adicional
-* [Expediente de Seguridad y Auditorías Adversariales (Certificación OWASP ASVS L3)](./docs/audit/README.md)
-* [Branch Protection en GitHub y Bloqueo Físico de Merges](./docs/BRANCH_PROTECTION.md)
+* [Expediente de Seguridad y Auditorías Adversariales](./docs/audit/README.md)
+* [Branch Protection en GitHub y Bloqueo Físico de Merges](./docs/BRANCH_PROTECTION.es.md)
 * [Caso de Estudio: Benchmark A/B en Vivo y Guía de Cobertura](./docs/ab-testing-and-coverage.es.md)
 * [Manual Operativo y Secuencias de Prompts (P0 - P11)](./MANUAL_OPERATIVO.es.md)
-* [Las 15 Invariantes Universales](.agent/rules/INVARIANTS.md)
-* [Compuerta Pre-Código SDD](.agent/rules/SDD_GATE.md)
+* [Las 15 Invariantes Universales](.agent/rules/INVARIANTS.es.md)
+* [Compuerta Pre-Código SDD](.agent/rules/SDD_GATE.es.md)

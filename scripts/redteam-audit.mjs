@@ -954,7 +954,18 @@ async function auditDomain9CoverageAndMutation() {
     const pyproj = fs.readFileSync(pyprojectPath, 'utf8');
     const wfTxt = fs.existsSync(wfPath) ? fs.readFileSync(wfPath, 'utf8') : '';
 
+    // F-02 (auditoría independiente): reconocer el gate real, no solo cadenas en workflow/pyproject.
+    const checkerPath = path.join(ROOT_DIR, 'scripts', 'check_python_coverage.py');
+    const pkgPath = path.join(ROOT_DIR, 'package.json');
+    const checkerTxt = fs.existsSync(checkerPath) ? fs.readFileSync(checkerPath, 'utf8') : '';
+    const pkgTxt = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, 'utf8') : '';
+    const invokesBranchGate =
+      /check_python_coverage\.py[^\n]*--min-branches/.test(wfTxt) ||
+      /check_python_coverage\.py[^\n]*--min-branches/.test(pkgTxt);
+    const checkerComputesBranches = /covered_branches/.test(checkerTxt) && /num_branches/.test(checkerTxt);
+
     const checksSeparateBranchThreshold =
+      (invokesBranchGate && checkerComputesBranches) ||
       /covered_branches|percent_branches_covered|branch_rate/.test(wfTxt) ||
       /covered_branches|percent_branches_covered/.test(pyproj);
 

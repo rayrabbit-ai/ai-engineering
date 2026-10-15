@@ -1,5 +1,7 @@
 # Adversarial Auditor — Zero-Trust Code & Gate Governance
 
+[English](ADVERSARIAL_AUDITOR.md) | [Español](ADVERSARIAL_AUDITOR.es.md)
+
 > **TARGET AUDIENCE**: AI Coding Assistants (Antigravity, Cursor, GitHub Copilot, Claude Code) and human peer reviewers.
 
 ---

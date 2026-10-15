@@ -1,5 +1,7 @@
 # Auditor Adversarial — Gobernanza de Código y Compuertas Zero-Trust
 
+[English](ADVERSARIAL_AUDITOR.md) | [Español](ADVERSARIAL_AUDITOR.es.md)
+
 > **AUDIENCIA OBJETIVO**: Asistentes de Código IA (Antigravity, Cursor, GitHub Copilot, Claude Code) y revisores humanos.
 
 ---

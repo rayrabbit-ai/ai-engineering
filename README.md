@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Official RayRabbit AI Template Repository**  
-> *The first deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + strict TDD causality + dual-mode autonomy (Invariant vs HITL) to eliminate "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
+> *Deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + scope-coupled TDD commit causality + dual-mode autonomy (Invariant vs HITL) to curb "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
 
 ---
 
@@ -36,7 +36,7 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
 
 > 🔬 **Empirical Evidence & Hostile AI Auditing**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
 >
-> 📸 **Battle-Tested Under Live Adversarial Stress**: Rather than relying on theoretical claims, this template was subjected to live adversarial stress-testing in GitHub Codespaces by frontline AI models (GitHub Copilot / GPT-6 Luna) prompted to actively exploit edge cases and break gates. Every nuance was physically remediated, verified, and sealed with 0 open vulnerabilities (see [Full Audit Dossier](./docs/audit/README.md)).
+> 📸 **Battle-Tested Under Live Adversarial Stress**: Rather than relying on theoretical claims, this template was subjected to live adversarial stress-testing in GitHub Codespaces by frontline AI models (GitHub Copilot / GPT-6 Luna) prompted to actively exploit edge cases and break gates. Findings and their remediation status are documented (see [Audit Dossier](./docs/audit/README.en.md)).
 >
 > <p align="center">
 >   <img src="docs/assets/codespaces-adversarial-copilot-audit.png" alt="Live Adversarial Audit in GitHub Codespaces" width="850"/>
@@ -213,7 +213,7 @@ npm run audit:redteam
 ---
 
 ## 7. Additional Documentation
-* [Security & Adversarial Audit Dossier (OWASP ASVS L3 Certified)](./docs/audit/README.md)
+* [Security & Adversarial Audit Dossier](./docs/audit/README.en.md)
 * [GitHub Branch Protection & Physical Merge Blocking](./docs/BRANCH_PROTECTION.md)
 * [Empirical A/B Benchmark Case Study & Coverage Guide](./docs/ab-testing-and-coverage.md)
 * [Operational Manual and Prompt Sequences (P0 - P11)](./OPERATIONAL_MANUAL.md)

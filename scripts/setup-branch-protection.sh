@@ -21,6 +21,21 @@ if [ -z "$REPO" ]; then
   exit 1
 fi
 
+if [[ ! "$REPO" =~ ^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$ ]]; then
+  echo "❌ Error: REPO debe tener el formato owner/repo válido (ej. rayrabbit-ai/ai-engineering)."
+  exit 1
+fi
+
+if [[ ! "$BRANCH" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+  echo "❌ Error: BRANCH contiene caracteres no permitidos."
+  exit 1
+fi
+
+if [[ ! "$REVIEWS" =~ ^[0-9]+$ ]] || [ "$REVIEWS" -lt 0 ] || [ "$REVIEWS" -gt 10 ]; then
+  echo "❌ Error: REVIEWS debe ser un número entero entre 0 y 10."
+  exit 1
+fi
+
 echo "🔒 Configurando Branch Protection en https://github.com/$REPO (rama: $BRANCH)..."
 
 gh api \
@@ -35,7 +50,8 @@ gh api \
       "Auditoría de Commits por Compuerta (Invariantes 1 y 3)",
       "Validación de Especificaciones OpenSpec",
       "Suite TypeScript / Node.js & Cobertura",
-      "Suite Python & Cobertura"
+      "Suite Python & Cobertura",
+      "Auditoría Ofensiva Red Team (10 Dominios ASVS L3)"
     ]
   },
   "enforce_admins": true,

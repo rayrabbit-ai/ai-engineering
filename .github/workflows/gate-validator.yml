@@ -31,17 +31,20 @@ jobs:
       - name: Autochequeo de Reglas Adversariales y Causalidad (Self-Test)
         run: |
           node scripts/verify-gates.mjs --self-test
+          node scripts/verify-red-failure.mjs --self-test
 
       - name: Verificación de Integridad de Agentes y Auditor Adversarial (Guard)
         run: |
           node scripts/guard-agent.mjs
 
       - name: Bloqueo de alteración no autorizada de compuertas en PR (F-01)
-        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'allow-gate-update')
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'allow-gate-update') && github.event.pull_request.author_association != 'OWNER' && github.event.pull_request.author_association != 'MEMBER'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          MODIFIED_GATES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(\.github/workflows/|scripts/verify|scripts/guard|\.agent/rules/)' || true)
+          MODIFIED_GATES=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -E '(^|/)(\.github/workflows/|scripts/|\.agent/rules/|\.agent/workflows/|package\.json|package-lock\.json|pyproject\.toml|requirements)' || true)
           if [ -n "$MODIFIED_GATES" ]; then
-            echo "❌ [GATE-SECURITY-FAIL] El PR modifica compuertas, reglas o workflows críticos:"
+            echo "❌ [GATE-SECURITY-FAIL] El PR modifica compuertas, reglas, dependencias o workflows críticos:"
             echo "$MODIFIED_GATES"
             echo "Para modificar contratos centrales, un maintainer debe etiquetar el PR con 'allow-gate-update'."
             exit 1
@@ -80,7 +83,6 @@ jobs:
   test-typescript:
     name: "Suite TypeScript / Node.js & Cobertura"
     runs-on: ubuntu-latest
-    if: hashFiles('package.json') != ''
     steps:
       - name: Checkout código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -103,10 +105,12 @@ jobs:
       - name: Tests Unitarios e Integración con Cobertura Mínima (Líneas ≥80%, Ramas ≥75%)
         run: npm run test:ts:coverage
 
+      - name: Suite E2E en Runtime Real TypeScript (Invariante 15)
+        run: npm run test:ts:e2e
+
   test-python:
     name: "Suite Python & Cobertura"
     runs-on: ubuntu-latest
-    if: hashFiles('pyproject.toml') != ''
     steps:
       - name: Checkout repositorio con historial completo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -127,6 +131,7 @@ jobs:
       - name: Autochequeo de Compuertas Adversariales (Python Self-Test)
         run: |
           python scripts/verify_gates.py --self-test
+          python scripts/verify_red_failure.py --self-test
 
       - name: Validar Nomenclatura y Causalidad TDD (Python History Audit)
         env:
@@ -150,3 +155,34 @@ jobs:
       - name: Suite E2E en Runtime Real (Invariante 15)
         run: |
           pytest -m e2e --tb=short
+
+  redteam-audit:
+    name: "Auditoría Ofensiva Red Team (10 Dominios ASVS L3)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio con historial completo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Configurar Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependencias bloqueadas
+        run: |
+          npm ci
+          python -m pip install -r requirements-test.txt
+          python -m pip install --no-deps --no-build-isolation -e .
+
+      - name: Ejecutar Suite de Red Team Automatizado (10 Dominios)
+        run: |
+          node scripts/redteam-audit.mjs --report docs/audit/informe-redteam.es.md

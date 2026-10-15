@@ -19,6 +19,7 @@ REQUIRED_CHECKS = [
     "Validación de Especificaciones OpenSpec",
     "Suite TypeScript / Node.js & Cobertura",
     "Suite Python & Cobertura",
+    "Auditoría Ofensiva Red Team (10 Dominios ASVS L3)",
 ]
 
 def get_default_repo() -> str | None:

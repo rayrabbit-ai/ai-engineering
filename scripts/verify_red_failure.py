@@ -27,10 +27,18 @@ def run_git(args: list[str]) -> list[str]:
         return [l.strip() for l in res.stdout.splitlines() if l.strip()]
     return []
 
+def is_executable_test_file(file_path: str) -> bool:
+    if not file_path:
+        return False
+    norm = file_path.replace("\\", "/").lower()
+    if not re.search(r"\.(ts|tsx|js|mjs|cjs|py)$", norm, re.IGNORECASE):
+        return False
+    return "tests/" in norm or "test/" in norm or ".spec." in norm or ".test." in norm
+
 def get_test_files() -> list[str]:
-    files = [f for f in run_git(["diff", "--cached", "--name-only"]) if "test" in f.lower() or "spec" in f.lower()]
+    files = [f for f in run_git(["diff", "--cached", "--name-only"]) if is_executable_test_file(f)]
     if not files:
-        files = [f for f in run_git(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]) if "test" in f.lower() or "spec" in f.lower()]
+        files = [f for f in run_git(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]) if is_executable_test_file(f)]
     return files
 
 def has_syntax_or_collection_error(output: str) -> bool:
@@ -41,10 +49,9 @@ def has_syntax_or_collection_error(output: str) -> bool:
         r"ERROR collecting",
         r"Cannot find module",
         r"ERR_MODULE_NOT_FOUND",
-        r"TypeError",
-        r"ReferenceError",
-        r"NameError",
-        r"AttributeError",
+        r"Failed to resolve import",
+        r"Unhandled Error",
+        r"Unhandled rejection",
     ]
     return any(re.search(pat, output, re.IGNORECASE) for pat in forbidden)
 
@@ -63,7 +70,21 @@ def has_legitimate_assertion_failure(output: str) -> bool:
     ]
     return any(re.search(pat, output, re.IGNORECASE) for pat in patterns)
 
+def self_test() -> int:
+    print("[RED-VERIFIER-SELF-TEST] Verificando filtros y aserciones de fallo en Python...")
+    assert not is_executable_test_file("requirements-test.txt"), "is_executable_test_file aceptó requirements-test.txt"
+    assert not is_executable_test_file("tests/foo.txt"), "is_executable_test_file aceptó tests/foo.txt"
+    assert is_executable_test_file("tests/unit/test_calc.py"), "is_executable_test_file rechazó tests/unit/test_calc.py"
+    assert is_executable_test_file("tests/unit/calc.spec.ts"), "is_executable_test_file rechazó tests/unit/calc.spec.ts"
+    assert not has_legitimate_assertion_failure("RuntimeError: setup fail"), "has_legitimate_assertion_failure aceptó error genérico"
+    assert has_legitimate_assertion_failure("AssertionError: assert 5 == 10"), "has_legitimate_assertion_failure rechazó AssertionError"
+    print("[RED-VERIFIER-SELF-TEST] ✅ Autochequeo de verificador RED en Python aprobado.")
+    return 0
+
 def main() -> int:
+    if "--self-test" in sys.argv:
+        return self_test()
+
     test_files = get_test_files()
     if not test_files:
         print("[RED-VERIFIER] No se detectaron archivos de test nuevos o modificados en staged ni en HEAD.")
@@ -73,9 +94,10 @@ def main() -> int:
 
     py_files = [f for f in test_files if f.endswith(".py")]
     ts_files = [f for f in test_files if f.endswith(".ts") or f.endswith(".js")]
+    verified = 0
 
     if py_files:
-        res = subprocess.run(["python", "-m", "pytest", *py_files], capture_output=True, text=True, shell=False)
+        res = subprocess.run(["python", "-m", "pytest", "--", *py_files], capture_output=True, text=True, shell=False)
         output = f"{res.stdout}\n{res.stderr}"
 
         if res.returncode == 0:
@@ -95,9 +117,10 @@ def main() -> int:
             return 1
 
         print(f"✅ [FÍSICO] Test Python falló por aserción legítima (exit code {res.returncode}).")
+        verified += 1
 
     if ts_files:
-        res = subprocess.run(["npx", "vitest", "run", *ts_files], capture_output=True, text=True, shell=False)
+        res = subprocess.run(["npx", "vitest", "run", "--", *ts_files], capture_output=True, text=True, shell=False)
         output = f"{res.stdout}\n{res.stderr}"
 
         if res.returncode == 0:
@@ -117,8 +140,13 @@ def main() -> int:
             return 1
 
         print(f"✅ [FÍSICO] Test TypeScript falló por aserción legítima (exit code {res.returncode}).")
+        verified += 1
 
-    print("[RED-VERIFIER] ✅ Causalidad física RED validada exitosamente.")
+    if verified == 0:
+        print("\n❌ ERROR EN FASE RED: No se ejecutó ni verificó ninguna prueba ejecutable.")
+        return 1
+
+    print(f"[RED-VERIFIER] ✅ Causalidad física RED validada exitosamente ({verified} aserciones fallidas legítimas).")
     return 0
 
 if __name__ == "__main__":

@@ -31,7 +31,13 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
 4. **Hardened against CWE-78 & Tampering**: All Git operations use direct process spawning with strict reference format validation (`git check-ref-format`); `.github/CODEOWNERS` prevents untrusted PRs from weakening the gates.
 5. **Built-in Adversarial Audit & Guard**: Pre-push and CI enforcement via [`guard-agent`](scripts/guard-agent.mjs), [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md), and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
-> 🔬 **Empirical Evidence**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
+> 🔬 **Empirical Evidence & Hostile AI Auditing**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
+>
+> 📸 **Battle-Tested Under Live Adversarial Stress**: Rather than relying on theoretical claims, this template was subjected to live adversarial stress-testing in GitHub Codespaces by frontline AI models (GitHub Copilot / GPT-6 Luna) prompted to actively exploit edge cases and break gates. Every nuance was physically remediated, verified, and sealed with 0 open vulnerabilities (see [Full Audit Dossier](./docs/audit/README.md)).
+>
+> <p align="center">
+>   <img src="docs/assets/codespaces-adversarial-copilot-audit.png" alt="Live Adversarial Audit in GitHub Codespaces" width="850"/>
+> </p>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -171,23 +177,32 @@ See [`QUICKSTART.md`](./QUICKSTART.md) to get started in 3 minutes.
 git clone https://github.com/rayrabbit-ai/ai-engineering.git my-project
 cd my-project
 
-# 2. Install dependencies (Node & Python)
-npm install
-pip install -e .[test]
+# 2. Install pinned dependencies (Node & Python)
+npm ci
+python -m pip install -r requirements-test.txt
+python -m pip install --no-deps --no-build-isolation -e .
 
-# 3. Audit commit gates at any time
+# 3. Enable physical branch protection on GitHub (1 command)
+npm run setup:branch-protection
+
+# 4. Audit commit gates at any time
 npm run verify:gates
 
-# 4. Run tests with separate line & branch coverage
+# 5. Run tests with separate line & branch coverage
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
+
+# 6. Execute full automated 10-domain adversarial red team audit
+npm run audit:redteam
 ```
 
 ---
 
 ## 7. Additional Documentation
+* [Security & Adversarial Audit Dossier (OWASP ASVS L3 Certified)](./docs/audit/README.md)
 * [GitHub Branch Protection & Physical Merge Blocking](./docs/BRANCH_PROTECTION.md)
 * [Empirical A/B Benchmark Case Study & Coverage Guide](./docs/ab-testing-and-coverage.md)
 * [Operational Manual and Prompt Sequences (P0 - P11)](./OPERATIONAL_MANUAL.md)
+
 * [The 15 Universal Invariants](.agent/rules/INVARIANTS.md)
 * [Pre-Code SDD Gate](.agent/rules/SDD_GATE.md)

@@ -55,12 +55,20 @@ def test_power_zero_base_negative_exponent_returns_none(engine: SafeMathEngine):
 
 @pytest.mark.unit
 def test_type_validation_raises(engine: SafeMathEngine):
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="Expected int or float"):
+        engine.add("foo", "bar")  # type: ignore
+    with pytest.raises(TypeError, match="Expected int or float"):
         engine.add("10", 5)  # type: ignore
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="Expected int or float"):
+        engine.add(True, 5)  # type: ignore
+    with pytest.raises(TypeError, match="Expected int or float"):
+        engine.subtract("10", "5")  # type: ignore
+    with pytest.raises(TypeError, match="Expected int or float"):
+        engine.multiply("4", 5)  # type: ignore
+    with pytest.raises(TypeError, match="Expected int or float"):
         engine.divide(10, True)  # type: ignore
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="Expected int or float"):
         engine.modulo("10", 3)  # type: ignore
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="Expected int or float"):
         engine.power("2", 3)  # type: ignore
 

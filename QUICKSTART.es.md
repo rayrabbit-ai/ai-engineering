@@ -45,7 +45,7 @@ Las plantillas de GitHub no copian la protección de ramas por política de segu
 npm run setup:branch-protection
 
 # Opción B: Desde la interfaz web de GitHub
-# Sigue el paso a paso detallado en docs/BRANCH_PROTECTION.md
+# Sigue el paso a paso detallado en docs/BRANCH_PROTECTION.es.md
 ```
 
 ---

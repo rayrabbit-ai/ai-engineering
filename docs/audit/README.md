@@ -1,5 +1,7 @@
 # RayRabbit AI Engineering — Expediente de Auditorías
 
+[English](README.en.md) | [Español](README.md)
+
 Este directorio reúne las auditorías externas y adversariales del harness y el estado de remediación de cada hallazgo. **Ningún documento de este expediente es una certificación formal** (OWASP, SLSA ni ninguna otra).
 
 ---
@@ -23,7 +25,7 @@ Este directorio reúne las auditorías externas y adversariales del harness y el
 | F-01 | El replay aceptaba como RED un fallo sin aserción | **Corregido.** `classifyTestResult` exige evidencia de aserción y `assertLegitimateRed` bloquea; hay self-tests de regresión (casos 6–9). Además se corrigió un fallo *fail-open* que no figuraba en el informe: el patch se corrompía por un `trim()` y el replay omitía el commit en silencio. Ahora bloquea. |
 | F-02 | D9 reportaba un falso umbral combinado de ramas en Python | **Corregido.** D9 reconoce `check_python_coverage.py --min-branches`. |
 | F-03 | Afirmaciones de capacidades sin método que las respalde | **Corregido en documentación.** Se eliminaron los claims de certificación (ver "Alcance"). |
-| F-04 | Branch protection no verificable (HTTP 403) | **Pendiente:** requiere verificación manual del propietario en *Settings → Branches*. |
+| F-04 | Branch protection no verificable (HTTP 403) | **Verificado físicamente:** GitHub rechazó el push directo a `main` con GH013 (se requieren 5 de 5 status checks y Pull Request). |
 | F-05 | Colisión `auth`/`billing/auth` | No reproducible en HEAD; se mantiene como caso de regresión en los self-tests. |
 
 ---

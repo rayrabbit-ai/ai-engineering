@@ -1,5 +1,7 @@
 # RayRabbit AI Engineering — Autonomous Agent Instructions
 
+[English](AGENTS.md) | [Español](AGENTS.es.md)
+
 > **Target Audience:** AI Coding Assistants (Google Antigravity, Claude Code, Cursor, Roo Code, GitHub Copilot, Codex, Cascade).
 
 Before making any code changes in this repository, you must read and adhere to:

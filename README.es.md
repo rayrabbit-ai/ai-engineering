@@ -214,8 +214,8 @@ npm run audit:redteam
 
 ## 7. Documentación Adicional
 * [Expediente de Seguridad y Auditorías Adversariales](./docs/audit/README.md)
-* [Branch Protection en GitHub y Bloqueo Físico de Merges](./docs/BRANCH_PROTECTION.md)
+* [Branch Protection en GitHub y Bloqueo Físico de Merges](./docs/BRANCH_PROTECTION.es.md)
 * [Caso de Estudio: Benchmark A/B en Vivo y Guía de Cobertura](./docs/ab-testing-and-coverage.es.md)
 * [Manual Operativo y Secuencias de Prompts (P0 - P11)](./MANUAL_OPERATIVO.es.md)
-* [Las 15 Invariantes Universales](.agent/rules/INVARIANTS.md)
-* [Compuerta Pre-Código SDD](.agent/rules/SDD_GATE.md)
+* [Las 15 Invariantes Universales](.agent/rules/INVARIANTS.es.md)
+* [Compuerta Pre-Código SDD](.agent/rules/SDD_GATE.es.md)

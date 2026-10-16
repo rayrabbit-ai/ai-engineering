@@ -99,14 +99,14 @@ export function runRedFlow(description, dryRun = false) {
     const vitestBin = path.join(ROOT_DIR, 'node_modules/.bin/vitest');
     if (fs.existsSync(vitestBin)) {
       console.log(`🧪 Ejecutando Vitest sobre [${testFiles.join(', ')}]...`);
-      const res = spawnSync('node', [vitestBin, 'run', ...testFiles], { cwd: ROOT_DIR, encoding: 'utf8' });
+      const res = spawnSync('node', [vitestBin, 'run', '--', ...testFiles], { cwd: ROOT_DIR, encoding: 'utf8' });
       const outcome = classifyTestResult(res.status, res.stdout, res.stderr);
       if (outcome.isFraud) {
         console.error(`❌ [FRAUDE TDD] El test ya pasa en verde (exit code 0). No se permite commit test(red).`);
         process.exit(1);
       }
-      if (outcome.isSyntaxError) {
-        console.error(`❌ [ERROR SINTAXIS] El test no compila o tiene errores de importación: ${outcome.reason}`);
+      if (outcome.isSyntaxError || !outcome.isLegitimateRed) {
+        console.error(`❌ [FALLO NO ASERTIVO / SINTAXIS] El test no falló por una aserción legítima: ${outcome.reason}`);
         process.exit(1);
       }
       console.log('✅ Fallo físico legítimo por aserción confirmado en TypeScript.');
@@ -115,14 +115,14 @@ export function runRedFlow(description, dryRun = false) {
 
   if (hasPy) {
     console.log(`🧪 Ejecutando Pytest sobre [${testFiles.join(', ')}]...`);
-    const res = spawnSync('python', ['-m', 'pytest', '-q', ...testFiles], { cwd: ROOT_DIR, encoding: 'utf8' });
+    const res = spawnSync('python', ['-m', 'pytest', '-q', '--', ...testFiles], { cwd: ROOT_DIR, encoding: 'utf8' });
     const outcome = classifyTestResult(res.status, res.stdout, res.stderr);
     if (outcome.isFraud) {
       console.error(`❌ [FRAUDE TDD] El test en Python ya pasa en verde (exit code 0).`);
       process.exit(1);
     }
-    if (outcome.isSyntaxError) {
-      console.error(`❌ [ERROR SINTAXIS] El test en Python contiene errores de sintaxis o importación: ${outcome.reason}`);
+    if (outcome.isSyntaxError || !outcome.isLegitimateRed) {
+      console.error(`❌ [FALLO NO ASERTIVO / SINTAXIS] El test en Python no falló por una aserción legítima: ${outcome.reason}`);
       process.exit(1);
     }
     console.log('✅ Fallo físico legítimo por aserción confirmado en Python.');
@@ -136,7 +136,7 @@ export function runRedFlow(description, dryRun = false) {
     return 0;
   }
 
-  runGit(['add', ...testFiles]);
+  runGit(['add', '--', ...testFiles]);
   runGit(['commit', '-m', commitMsg]);
   console.log(`✅ Commit test(red) creado exitosamente.`);
   return 0;

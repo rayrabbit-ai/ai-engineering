@@ -90,7 +90,9 @@ def is_production_file(file_path: str) -> bool:
         norm.endswith(".md") or norm.endswith(".json") or norm.endswith(".yaml") or
         norm.endswith(".yml") or norm.endswith(".toml") or norm.endswith(".txt") or
         norm.endswith(".lock") or norm.endswith(".ini") or norm == ".gitignore" or
-        norm.endswith("/.gitignore") or norm == "license" or norm.endswith("/license")
+        norm.endswith("/.gitignore") or norm == "license" or norm.endswith("/license") or
+        norm.endswith(".config.ts") or norm.endswith(".config.js") or
+        norm.endswith(".config.mjs") or norm.endswith(".config.cjs")
     ):
         return False
     if norm.startswith("src/") or "/src/" in norm or norm.startswith("lib/") or "/lib/" in norm or norm.startswith("app/") or "/app/" in norm:

@@ -56,19 +56,19 @@ def has_syntax_or_collection_error(output: str) -> bool:
     return any(re.search(pat, output, re.IGNORECASE) for pat in forbidden)
 
 def has_legitimate_assertion_failure(output: str) -> bool:
-    # 1. Prohibir errores genéricos de excepción (ej. raise RuntimeError, raise ValueError) que no son aserciones
-    if re.search(r"(RuntimeError|ValueError|KeyError|IndexError|Exception):", output) and not re.search(r"AssertionError", output):
+    # 1. Prohibir errores genéricos de excepción que no son aserciones
+    if re.search(r"(RuntimeError|ValueError|TypeError|ZeroDivisionError|KeyError|IndexError|AttributeError|NameError|Exception):", output) and not re.search(r"(AssertionError|^E\s+assert\b)", output, re.MULTILINE):
         return False
 
     patterns = [
         r"AssertionError",
-        r"assert\s+",
+        r"^E\s+assert\s+",
         r"assert\(",
         r"Assertion failed",
         r"expected\s+.+\s+to\b",
         r"Expected:.+Received:",
     ]
-    return any(re.search(pat, output, re.IGNORECASE) for pat in patterns)
+    return any(re.search(pat, output, re.IGNORECASE | re.MULTILINE) for pat in patterns)
 
 def self_test() -> int:
     print("[RED-VERIFIER-SELF-TEST] Verificando filtros y aserciones de fallo en Python...")
@@ -77,7 +77,9 @@ def self_test() -> int:
     assert is_executable_test_file("tests/unit/test_calc.py"), "is_executable_test_file rechazó tests/unit/test_calc.py"
     assert is_executable_test_file("tests/unit/calc.spec.ts"), "is_executable_test_file rechazó tests/unit/calc.spec.ts"
     assert not has_legitimate_assertion_failure("RuntimeError: setup fail"), "has_legitimate_assertion_failure aceptó error genérico"
+    assert not has_legitimate_assertion_failure("    assert x == 1\nZeroDivisionError: division by zero"), "has_legitimate_assertion_failure aceptó ZeroDivisionError con código fuente assert"
     assert has_legitimate_assertion_failure("AssertionError: assert 5 == 10"), "has_legitimate_assertion_failure rechazó AssertionError"
+    assert has_legitimate_assertion_failure("E       assert 5 == 10"), "has_legitimate_assertion_failure rechazó E assert de pytest"
     print("[RED-VERIFIER-SELF-TEST] ✅ Autochequeo de verificador RED en Python aprobado.")
     return 0
 
@@ -87,8 +89,8 @@ def main() -> int:
 
     test_files = get_test_files()
     if not test_files:
-        print("[RED-VERIFIER] No se detectaron archivos de test nuevos o modificados en staged ni en HEAD.")
-        return 0
+        print("[RED-VERIFIER] ❌ No se detectaron archivos de test nuevos o modificados en staged ni en HEAD (Fail-Closed).")
+        return 1
 
     print(f"[RED-VERIFIER] Verificando aserción de fallo físico en: [{', '.join(test_files)}]...")
 

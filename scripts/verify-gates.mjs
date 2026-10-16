@@ -77,6 +77,7 @@ export function isProductionFile(filePath) {
     norm.includes('node_modules/') || norm.includes('dist/') || norm.includes('coverage/')
   ) return false;
   if (norm.endsWith('.md') || norm.endsWith('.json') || norm.endsWith('.yaml') || norm.endsWith('.yml') || norm.endsWith('.toml') || norm.endsWith('.txt') || norm.endsWith('.lock') || norm.endsWith('.ini')) return false;
+  if (norm.endsWith('.config.ts') || norm.endsWith('.config.js') || norm.endsWith('.config.mjs') || norm.endsWith('.config.cjs')) return false;
   if (norm === '.gitignore' || norm.endsWith('/.gitignore') || norm === 'license' || norm.endsWith('/license')) return false;
   // Todo archivo bajo src/, lib/, app/, pkg/
   if (norm.startsWith('src/') || norm.includes('/src/') || norm.startsWith('lib/') || norm.includes('/lib/') || norm.startsWith('app/') || norm.includes('/app/')) return true;

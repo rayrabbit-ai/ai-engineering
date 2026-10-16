@@ -92,8 +92,8 @@ function main() {
 
   const testFiles = getStagedOrHeadTestFiles();
   if (testFiles.length === 0) {
-    console.log('[RED-VERIFIER] No se detectaron archivos de test nuevos o modificados en staged ni en HEAD.');
-    process.exit(0);
+    console.error('[RED-VERIFIER] ❌ No se detectaron archivos de test nuevos o modificados en staged ni en HEAD (Fail-Closed).');
+    process.exit(1);
   }
 
   console.log(`[RED-VERIFIER] Verificando aserción de fallo físico en: [${testFiles.join(', ')}]...`);

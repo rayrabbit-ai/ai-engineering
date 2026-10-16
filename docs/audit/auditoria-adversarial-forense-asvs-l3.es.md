@@ -1,7 +1,9 @@
-# INFORME DE AUDITORÍA FORENSE, PENETRACIÓN FÍSICA Y GOBERNANZA ADVERSARIAL
+# INFORME DE AUDITORÍA FORENSE, PENETRACIÓN FÍSICA Y GOBERNANZA ADVERSARIAL (HISTÓRICO)
+
+> [!NOTE]
+> **Documento Histórico de Iteración Interna:** Este archivo se conserva como registro histórico de la primera iteración de pruebas internas. **No constituye una certificación formal (OWASP ASVS L3 ni SLSA L3).** Para el alcance real vigente y las auditorías forenses independientes posteriores, consulte [`docs/audit/README.md`](README.md) y [`2026-10-15-auditoria-forense-ai-engineering.es.md`](2026-10-15-auditoria-forense-ai-engineering.es.md).
+
 **Objetivo:** `c:\Users\rayrabbit-oss-github\ai-engineering`  
-**Estándares de Evaluación:** OWASP ASVS L3 (v4.0.3/v5.0), OWASP Top 10 CI/CD Risks, OWASP Top 10 for LLM, SLSA L3, MITRE ATT&CK / ATLAS, CWE Top 25 y CVSS v4.0.  
-**Auditor:** Principal Offensive Security Researcher, Red Teamer y Auditor Forense (RayRabbit AI Engineering).  
 **Fecha:** 15 de Octubre de 2026.
 
 ---

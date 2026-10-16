@@ -51,7 +51,7 @@ gh api \
       "Validación de Especificaciones OpenSpec",
       "Suite TypeScript / Node.js & Cobertura",
       "Suite Python & Cobertura",
-      "Auditoría Ofensiva Red Team (10 Dominios ASVS L3)"
+      "Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)"
     ]
   },
   "enforce_admins": true,
@@ -76,3 +76,4 @@ echo "    * Auditoría de Commits por Compuerta (Invariantes 1 y 3)"
 echo "    * Validación de Especificaciones OpenSpec"
 echo "    * Suite TypeScript / Node.js & Cobertura"
 echo "    * Suite Python & Cobertura"
+echo "    * Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)"

@@ -154,14 +154,14 @@ Este repositorio incluye puntos de entrada canónicos en la raíz para que los a
 │   ├── specs/                   # Especificaciones vivas
 │   └── changes/                 # Cambios activos (propuesta, diseño, tareas)
 ├── scripts/
-│   ├── verify-gates.mjs         # Validador de commits en Node.js inmune a CWE-78
-│   ├── verify_gates.py          # Validador de commits en Python inmune a CWE-78
+│   ├── verify-gates.mjs         # Validador de commits en Node.js (execFileSync con array de argumentos)
+│   ├── verify_gates.py          # Validador de commits en Python (subprocess sin shell=True)
 │   ├── verify-historical-replay.mjs # Replay histórico físico de commits RED en CI (git worktree)
 │   ├── verify-red-failure.mjs   # Aserción física de fallo en fase RED (Node.js)
 │   ├── verify_red_failure.py    # Aserción física de fallo en fase RED (Python)
 │   ├── check_python_coverage.py # Verificador mecánico independiente de líneas y ramas
 │   ├── tdd-flow.mjs             # CLI de ergonomía TDD (tdd:red, tdd:green, tdd:refactor)
-│   ├── redteam-audit.mjs        # Batería heurística de chequeos de seguridad (12 probes; no es certificación)
+│   ├── redteam-audit.mjs        # Escáner heurístico interno de seguridad y contratos (13 chequeos; no es certificación)
 │   ├── guard-agent.mjs          # Guardián estructural y semántico de contratos
 │   ├── setup_branch_protection.py # Configuración automatizada de branch protection
 │   └── setup-branch-protection.sh # Script bash para branch protection
@@ -206,7 +206,7 @@ npm run verify:replay:self-test
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
 
-# 8. Ejecutar auditoría ofensiva y red teaming automatizado de 10 dominios
+# 8. Ejecutar escáner heurístico interno de seguridad y contratos
 npm run audit:redteam
 ```
 

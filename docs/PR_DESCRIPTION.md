@@ -1,58 +1,48 @@
 ## 🛡️ Pull Request Summary
 
-This Pull Request consolidates the 100% physical remediation of all ten (10) security and causality findings (F-01 through F-10) identified during the deep adversarial audit under **OWASP ASVS L3 / OWASP CI/CD Top 10 / SLSA L3** standards.
+This Pull Request consolidates the technical remediation of all security, contract, and causality findings identified across internal and independent forensic audits of the harness.
 
-Additionally, it integrates the automated 10-domain Red Teaming suite (`scripts/redteam-audit.mjs`), final remediation certification, and live adversarial audit evidence captured in GitHub Codespaces.
+Additionally, it integrates the hardened semantic contract guardian (`scripts/guard-agent.mjs` with `--self-test`), the internal heuristic security and contract scanner (`scripts/redteam-audit.mjs`), verifiable GitHub Ruleset configuration (`docs/audit/github-ruleset-main.json`), and bilingual documentation alignment.
 
 ---
 
 ### 📦 Key Changes Implemented
 
-1. **Anti-Tampering & PPE Mitigation (F-01 & F-02):**
-   - Updated regular expression in `gate-validator.yml` with `(^|/)` to support monorepo subtrees and path boundaries.
-   - Protected critical infrastructure in `.github/CODEOWNERS`: `package.json`, `package-lock.json`, `pyproject.toml`, `requirements*`, and workflow files.
-   - Eliminated direct `${{ github.base_ref }}` interpolation in shell blocks, passing sanitized refs via `env: BASE_REF` (mitigating CWE-78).
+1. **Semantic Contract Guardian Hardening (`scripts/guard-agent.mjs`):**
+   - Replaced disjunction check (`anchors.some()`) and shallow length threshold (`50` chars) with strict conjunction (`anchors.every()`), per-contract `minLength`, and structural verification of all 15 numbered invariant clauses (`1.`–`15.`) in `INVARIANTS.md` and `INVARIANTS.es.md`, 6 numbered clauses in `ADVERSARIAL_AUDITOR.md`/`.es.md`, and routing rules `R1`–`R5` in `AGENTS.md`/`.es.md`.
+   - Added `--self-test` mode (`npm run verify:guard:self-test`) verifying that single-anchor placeholder replacement of `INVARIANTS.md` is rejected with exit code `1`.
 
-2. **TDD Causality & Hierarchical Scope Coupling (F-03 & F-04):**
-   - `extractModuleName` in TypeScript and Python now preserves hierarchical directory trees (`ui/button` vs `payments/button`), preventing cross-directory scope spoofing.
-   - `isProductionFile` accurately classifies support directories (`/scripts/`, `/docs/`, `/openspec/`) in monorepo subtrees, preventing false TDD causality rejections.
+2. **Internal Heuristic Security & Contract Scanner (`scripts/redteam-audit.mjs`):**
+   - Removed inaccurate static findings and unsubstantiated compliance headers; dynamically executes `guard-agent.mjs --self-test` and in-memory `validateGuardContracts` checks in Domain 3.
+   - Renamed CI job in `.github/workflows/gate-validator.yml` and GitHub Ruleset `25150565` to `Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)`.
 
-3. **Physical RED Failure Assertion & Argument Injection Mitigation (F-05 & F-06):**
-   - Enforced strict executable test file extensions (`isExecutableTestFile`) and injected argument delimiters (`--`) before test runner invocations in `verify-red-failure.mjs` and `verify_red_failure.py`.
-   - Integrated automated `--self-test` steps directly into CI workflows (`npm run verify:red:self-test`).
+3. **Historical RED Replay & Assertion Verification (`scripts/verify-historical-replay.mjs`):**
+   - `classifyTestResult` and `assertLegitimateRed` enforce explicit assertion failure evidence in isolated `git worktree` replays, blocking syntax/collection errors in fail-closed mode.
+   - Preserves untrimmed trailing newlines on `git diff` patches so `git apply` never skips commits.
 
-4. **Parameter Sanitization & Branch Protection Hardening (F-07 & F-08):**
-   - Rigorous regex validation for `$REPO`, `$BRANCH`, and integer validation for `$REVIEWS` in `setup-branch-protection.sh`.
-   - Comprehensive Ruleset step-by-step setup guide in `docs/BRANCH_PROTECTION.md`.
+4. **TDD Causality & Hierarchical Scope Coupling (`scripts/verify-gates.mjs` & `scripts/verify_gates.py`):**
+   - Preserves relative directory hierarchy (`ui/button` vs `payments/button`), prevents multi-module scope smuggling, and classifies non-canonical directories accurately.
 
-5. **Mutant Elimination & Independent Coverage Gates (F-09):**
-   - Added explicit unit tests verifying `TypeError` raises for invalid runtime argument types in `tests/unit/test_calculator.py`, eliminating boolean mutation survivors.
-   - `scripts/check_python_coverage.py` mechanically enforces statement coverage (87.76% >= 80%) and branch coverage (83.87% >= 75%) independently.
+5. **Independent Line & Branch Coverage Gates:**
+   - `scripts/check_python_coverage.py` and `vitest.config.ts` enforce statement/line coverage (`>= 80%`) and branch coverage (`>= 75%`) independently.
 
-6. **Polyglot Entrypoint Parity & TypeScript E2E Suite (F-10):**
-   - 100% coverage achieved for library entrypoint `src/index.ts` via `tests/ts/unit/index.spec.ts`.
-   - Implemented real-runtime TypeScript E2E suite (`tests/ts/e2e/calculator.e2e.spec.ts`) registered under `"test:ts:e2e"`.
-
-7. **⚡ Automated 10-Domain Red Teaming Suite (Gemini 4 Argon):**
-   - Integrated `scripts/redteam-audit.mjs` (10 offensive security domains, taint analysis, ReDoS benchmarks, and in-memory differential fuzzing).
-   - Added npm script `"audit:redteam"` and generated audit report in `docs/audit/informe-redteam.es.md` with **APPROVED (0 Critical / High)** verdict.
-
-8. **📸 Audit Dossier Structure & Live Codespaces Evidence:**
-   - Consolidated audit dossier in `docs/audit/` with historical reports, certifications, and reproducibility guides.
-   - Embedded high-resolution live GitHub Codespaces Copilot stress-testing screenshot in `docs/assets/` linked across `README.md` and `README.es.md`.
+6. **Verifiable GitHub Ruleset Snapshot (`docs/audit/github-ruleset-main.json`):**
+   - Added authenticated snapshot of active GitHub Ruleset `25150565` on `main` (`enforcement: active`, 5 required status checks, pull request review & CODEOWNERS enforcement).
 
 ---
 
-### 🧪 Physical Verification Matrix (10/10 Passed Locally)
+### 🧪 Physical Verification Matrix (13/13 Passed Locally)
 
 - `node scripts/guard-agent.mjs` -> **Exit 0**
+- `npm run verify:guard:self-test` -> **Exit 0** (5/5 passed)
 - `npm run verify:gates:self-test` -> **Exit 0** (17/17 passed)
 - `npm run verify:gates:py:self-test` -> **Exit 0** (16/16 passed)
 - `npm run verify:red:self-test` -> **Exit 0** (4/4 passed)
 - `npm run verify:red:py:self-test` -> **Exit 0** (4/4 passed)
+- `npm run verify:replay:self-test` -> **Exit 0** (9/9 passed)
 - `npm run test:ts:coverage` -> **Lines: 87.61% | Branches: 77.27%**
 - `npm run test:ts:e2e` -> **Exit 0**
 - `npm run test:py:coverage` -> **Lines: 87.76% | Branches: 83.87%**
 - `pytest -m e2e` -> **Exit 0**
 - `npm run spec:validate` -> **Exit 0**
-- `npm run audit:redteam` -> **Exit 0 (0 Critical / High findings)**
+- `npm run audit:redteam` -> **Exit 0 (0 findings across 13 checks)**

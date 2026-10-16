@@ -84,7 +84,7 @@ Open your preferred AI coding assistant (Google Antigravity, Cursor, Claude Code
    # Python gate validator
    npm run verify:gates:py
 
-   # Automated 10-domain adversarial red team suite
+   # Internal heuristic security & contract scanner
    npm run audit:redteam
 
    # Or the full pre-push adversarial audit workflow

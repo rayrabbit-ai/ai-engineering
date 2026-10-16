@@ -1,0 +1,81 @@
+{
+  "id": 25150565,
+  "name": "main",
+  "target": "branch",
+  "source_type": "Repository",
+  "source": "rayrabbit-ai/ai-engineering",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_linear_history"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": true,
+        "required_reviewers": [],
+        "require_code_owner_review": true,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false,
+        "require_extra_approval_for_unattributed_changes": true,
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "Auditoría de Commits por Compuerta (Invariantes 1 y 3)"
+          },
+          {
+            "context": "Validación de Especificaciones OpenSpec"
+          },
+          {
+            "context": "Suite TypeScript / Node.js & Cobertura"
+          },
+          {
+            "context": "Suite Python & Cobertura"
+          },
+          {
+            "context": "Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)"
+          }
+        ]
+      }
+    }
+  ],
+  "node_id": "RRS_lACqUmVwb3NpdG9yec5UiFmhzgF_xGU",
+  "created_at": "2026-10-15T06:24:31.763-03:00",
+  "updated_at": "2026-10-15T20:50:02.183-03:00",
+  "bypass_actors": [],
+  "current_user_can_bypass": "never",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/rayrabbit-ai/ai-engineering/rulesets/25150565"
+    },
+    "html": {
+      "href": "https://github.com/rayrabbit-ai/ai-engineering/rules/25150565"
+    }
+  }
+}

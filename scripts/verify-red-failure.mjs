@@ -10,6 +10,8 @@
 
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function runGit(args) {
   const res = spawnSync('git', args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
@@ -55,7 +57,10 @@ export function hasSyntaxOrCollectionError(output) {
 }
 
 export function hasLegitimateAssertionFailure(output) {
-  // 1. Prohibir errores genéricos de runtime (ej. throw new Error('setup fail')) que no son aserciones
+  // 1. Prohibir errores genéricos de runtime, crashes o sintaxis
+  if (/(?:Uncaught\s+)?(TypeError|ReferenceError|RangeError|SyntaxError|SystemError):/i.test(output)) {
+    return false;
+  }
   if (/(?:Uncaught\s+)?Error:\s+(?!.*Assertion)/i.test(output) && !/AssertionError/i.test(output) && !/expected\s+.+\s+to/i.test(output)) {
     return false;
   }
@@ -66,7 +71,6 @@ export function hasLegitimateAssertionFailure(output) {
     /Assertion failed/i,
     /expected\s+.+\s+to\b/i,
     /Expected:.+Received:/is,
-    /expect\(.+?\)\./i,
     /\bassert\b\(/i,
     /\bassert\.[a-zA-Z]/i,
   ];
@@ -80,6 +84,12 @@ export function selfTest() {
   if (!isExecutableTestFile('tests/unit/calc.spec.ts')) throw new Error('isExecutableTestFile rechazó tests/unit/calc.spec.ts');
   if (!isExecutableTestFile('tests/unit/test_calc.py')) throw new Error('isExecutableTestFile rechazó tests/unit/test_calc.py');
   if (hasLegitimateAssertionFailure('Error: setup failed')) throw new Error('hasLegitimateAssertionFailure aceptó error genérico');
+  if (hasLegitimateAssertionFailure('TypeError: x is not a function\n ❯ tests/calc.spec.ts:5:12\n    expect(x()).toBe(1)')) {
+    throw new Error('hasLegitimateAssertionFailure aceptó TypeError con línea expect');
+  }
+  if (hasLegitimateAssertionFailure('ReferenceError: foo is not defined\n    assert(foo === 1)')) {
+    throw new Error('hasLegitimateAssertionFailure aceptó ReferenceError con línea assert');
+  }
   if (!hasLegitimateAssertionFailure('AssertionError: expected 5 to be 10')) throw new Error('hasLegitimateAssertionFailure rechazó AssertionError');
   console.log('[RED-VERIFIER-SELF-TEST] ✅ Autochequeo de verificador RED aprobado.');
 }
@@ -166,4 +176,7 @@ function main() {
   process.exit(0);
 }
 
-main();
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isMain) {
+  main();
+}

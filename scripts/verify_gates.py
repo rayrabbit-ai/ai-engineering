@@ -58,6 +58,9 @@ def is_test_file(file_path: str) -> bool:
     if not file_path:
         return False
     norm = file_path.replace("\\", "/").lower()
+    base_name = norm.split("/")[-1]
+    if base_name in ("__init__.py", "conftest.py"):
+        return False
     # Debe ser código ejecutable de pruebas
     if not re.search(r"\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$", norm, re.IGNORECASE):
         return False
@@ -105,6 +108,9 @@ def extract_module_name(file_path: str) -> str:
     if not file_path:
         return ""
     norm = file_path.replace("\\", "/")
+    base_name = norm.lower().split("/")[-1]
+    if base_name in ("__init__.py", "conftest.py"):
+        return ""
     # Eliminar prefijos de subproyecto o raíz de pruebas/código
     norm = re.sub(r"^(?:[a-zA-Z0-9_-]+/)?(?:tests|test)/(?:ts/)?(?:unit/|integration/|characterization/|e2e/)?", "", norm, flags=re.IGNORECASE)
     norm = re.sub(r"^(?:[a-zA-Z0-9_-]+/)?(?:src|lib|app|pkg|rayrabbit)/", "", norm, flags=re.IGNORECASE)
@@ -174,6 +180,8 @@ def is_valid_ref_format(ref: str) -> bool:
     trimmed = ref.strip()
     if not trimmed or len(trimmed) > 255:
         return False
+    if trimmed.startswith("-"):
+        return False
     # Prohibir terminantemente metacaracteres de shell y saltos de línea
     if re.search(r"[;&|`$><\r\n\t ]", trimmed):
         return False
@@ -235,8 +243,23 @@ def validate_commit_list(commits: list[tuple], active_changes: set[str] | None =
                 f"(ej. 'test(red):', 'feat(green):', 'refactor:', 'test(baseline):', 'fix:')."
             )
 
+        # F-NEW-01: Prohibir contrabando de código de producción en commits no-código (docs, chore, spec, triage, test)
+        is_prod_altering_gate = bool(re.match(r"^(?:feat\(green\)|fix|refactor)(\([a-z0-9_/-]+\))?:", subject_stripped, re.IGNORECASE))
+        if not is_prod_altering_gate and not re.match(r"^test\(red\)", subject_stripped, re.IGNORECASE):
+            prod_files = [f for f in changed_files if is_production_file(f)]
+            if prod_files:
+                gate_type = subject_stripped.split(":")[0]
+                errors.append(
+                    f"[{short_hash}] Violación de Invariante de Compuerta en '{subject_stripped}': "
+                    f"Un commit de tipo no-código '{gate_type}' NO puede modificar código de producción (detectado: {', '.join(prod_files)}). "
+                    f"Use 'test(red)' seguido de 'feat(green)', 'fix' o 'refactor'."
+                )
+
         # 2. Registrar presencia de RED y sus ámbitos
         if re.match(r"^test\(red\)(\([a-z0-9_/-]+\))?:", subject_stripped, re.IGNORECASE):
+            # Invariante: Un nuevo test(red) invalida scopes RED previos no consumidos para evitar Stale RED (F-NEW-02)
+            active_red_scopes.clear()
+
             # Invariante 1 & 3: Un commit test(red) no puede incluir código de producción
             prod_files = [f for f in changed_files if is_production_file(f)]
             if prod_files:
@@ -537,7 +560,33 @@ def self_test():
         ("os0008", "feat(green)(deterministic-causality-harness/calc): impl calc with composite scope", ["src/calc.py"])
     ]
     errs_valid_composite_os = validate_commit_list(valid_composite_scope_os)
-    assert not errs_valid_composite_os, f"Falló aceptación de commit con scope compuesto OpenSpec válido: {errs_valid_composite_os}"
+    # Caso 19 (F-NEW-01): Contrabando de producción en commits no-código (docs, chore, spec, triage, test(baseline)) -> DEBE SER RECHAZADO
+    invalid_smuggle_docs = [
+        ("smg0001", "docs: update readme and smuggle calc", ["README.md", "src/calc.py"])
+    ]
+    errs_smuggle_docs = validate_commit_list(invalid_smuggle_docs)
+    assert any("Violación de Invariante de Compuerta" in e and "src/calc.py" in e for e in errs_smuggle_docs), "FALLÓ MITIGACIÓN F-NEW-01: verify_gates.py permitió código de producción en un commit docs"
+
+    invalid_smuggle_chore = [
+        ("smg0002", "chore: bump dependencies and smuggle calc", ["package.json", "src/calc.py"])
+    ]
+    errs_smuggle_chore = validate_commit_list(invalid_smuggle_chore)
+    assert any("Violación de Invariante de Compuerta" in e and "src/calc.py" in e for e in errs_smuggle_chore), "FALLÓ MITIGACIÓN F-NEW-01: verify_gates.py permitió código de producción en un commit chore"
+
+    # Caso 20 (F-NEW-02): Exclusión de __init__.py / conftest.py e Invalidación de Stale RED
+    assert not is_test_file("tests/__init__.py") and not is_test_file("tests/conftest.py"), "FALLÓ MITIGACIÓN F-NEW-02: is_test_file aceptó __init__.py o conftest.py como test ejecutable"
+    assert extract_module_name("tests/__init__.py") == "" and extract_module_name("tests/conftest.py") == "", "FALLÓ MITIGACIÓN F-NEW-02: extract_module_name infirió nombre de módulo sobre __init__.py o conftest.py"
+
+    invalid_stale_red = [
+        ("stale01", "test(red)(auth): failing auth test", ["tests/test_auth.py"]),
+        ("fresh02", "test(red)(billing): failing billing test", ["tests/test_billing.py"]),
+        ("green03", "feat(green)(deterministic-causality-harness/auth): implement auth exploiting stale red", ["src/auth.py"])
+    ]
+    errs_stale = validate_commit_list(invalid_stale_red)
+    assert any("no coincide con ningún test(red) activo previo" in e for e in errs_stale), "FALLÓ MITIGACIÓN F-NEW-02: verify_gates.py permitió explotar un RED obsoleto (stale RED) de otro ámbito"
+
+    # Caso 21 (F-NEW-05): Rechazo estricto de referencias con prefijo '-' en is_valid_ref_format
+    assert not is_valid_ref_format("--version") and not is_valid_ref_format("-u") and not is_valid_ref_format("--help"), "FALLÓ MITIGACIÓN F-NEW-05: is_valid_ref_format aceptó argumentos que comienzan con guión"
 
     print("[SELF-TEST] ✅ Todas las aserciones internas y pruebas adversariales pasaron con éxito.\n")
     return 0

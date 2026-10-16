@@ -52,6 +52,8 @@ export const LEGACY_BASELINE_PATTERNS = [
 export function isTestFile(filePath) {
   if (!filePath) return false;
   const norm = filePath.replace(/\\/g, '/').toLowerCase();
+  const baseName = norm.split('/').pop();
+  if (baseName === '__init__.py' || baseName === 'conftest.py') return false;
   // Debe tener una extensión ejecutable de código de pruebas
   if (!/\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$/i.test(norm)) return false;
   if (norm.startsWith('tests/') || norm.startsWith('test/') || norm.includes('/tests/') || norm.includes('/test/')) return true;
@@ -89,6 +91,8 @@ export function isProductionFile(filePath) {
 export function extractModuleName(filePath) {
   if (!filePath) return '';
   let normalized = filePath.replace(/\\/g, '/');
+  const baseName = normalized.toLowerCase().split('/').pop();
+  if (baseName === '__init__.py' || baseName === 'conftest.py') return '';
   // Eliminar prefijos de subproyecto o raíz de pruebas/código
   normalized = normalized.replace(/^(?:[a-zA-Z0-9_-]+\/)?(?:tests|test)\/(?:ts\/)?(?:unit\/|integration\/|characterization\/|e2e\/)?/i, '');
   normalized = normalized.replace(/^(?:[a-zA-Z0-9_-]+\/)?(?:src|lib|app|pkg|rayrabbit)\//i, '');
@@ -169,6 +173,7 @@ export function isValidRefFormat(ref) {
   if (!ref || typeof ref !== 'string') return false;
   const trimmed = ref.trim();
   if (trimmed.length === 0 || trimmed.length > 255) return false;
+  if (trimmed.startsWith('-')) return false;
   // Prohibir terminantemente metacaracteres de shell y saltos de línea
   if (/[;&|`$><\r\n\t ]/.test(trimmed)) return false;
   // Permitir revisiones compuestas legítimas (ej. HEAD~1, origin/main, v1.0.0, commits SHA-1/2)
@@ -231,8 +236,23 @@ export function validateCommitList(commits, options = {}) {
       );
     }
 
+    // F-NEW-01: Prohibir contrabando de código de producción en commits no-código (docs, chore, spec, triage, test)
+    const isProdAlteringGate = /^(?:feat\(green\)|fix|refactor)(\([a-z0-9_/-]+\))?:/i.test(trimmedSubject);
+    if (!isProdAlteringGate && !/^test\(red\)/i.test(trimmedSubject)) {
+      const prodFiles = changedFiles.filter(isProductionFile);
+      if (prodFiles.length > 0) {
+        const gateType = trimmedSubject.split(':')[0];
+        errors.push(
+          `[${shortHash}] Violación de Invariante de Compuerta en '${trimmedSubject}': Un commit de tipo no-código '${gateType}' NO puede modificar código de producción (detectado: ${prodFiles.join(', ')}). Use 'test(red)' seguido de 'feat(green)', 'fix' o 'refactor'.`
+        );
+      }
+    }
+
     // 2. Registro de Test en Rojo (RED) y sus ámbitos
     if (/^test\(red\)(\([a-z0-9_/-]+\))?:/i.test(trimmedSubject)) {
+      // Invariante: Un nuevo test(red) invalida scopes RED previos no consumidos para evitar Stale RED (F-NEW-02)
+      activeRedScopes.clear();
+
       // Invariante 1 & 3: Un commit test(red) no puede incluir código de producción
       const prodFiles = changedFiles.filter(isProductionFile);
       if (prodFiles.length > 0) {
@@ -595,7 +615,46 @@ export function selfTest() {
     throw new Error(`Falló aceptación de commit con scope compuesto OpenSpec válido: ${errsValidCompositeOS.join(', ')}`);
   }
 
-  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo mitigación F-02 CWE-78, F-03 Scope Spoofing, Test no ejecutable y Ghost Green) pasaron exitosamente.');
+  // Caso 20 (F-NEW-01): Contrabando de producción en commits no-código (docs, chore, spec, triage, test(baseline)) -> DEBE SER RECHAZADO
+  const invalidSmuggleDocs = [
+    { hash: 'smg0001', subject: 'docs: update readme and smuggle calc', changedFiles: ['README.md', 'src/calc.ts'] }
+  ];
+  const errsSmuggleDocs = validateCommitList(invalidSmuggleDocs);
+  if (!errsSmuggleDocs.some((e) => e.includes('Violación de Invariante de Compuerta') && e.includes('src/calc.ts'))) {
+    throw new Error('FALLÓ MITIGACIÓN F-NEW-01: verify-gates.mjs permitió código de producción en un commit docs.');
+  }
+
+  const invalidSmuggleChore = [
+    { hash: 'smg0002', subject: 'chore: bump dependencies and smuggle calc', changedFiles: ['package.json', 'src/calc.ts'] }
+  ];
+  const errsSmuggleChore = validateCommitList(invalidSmuggleChore);
+  if (!errsSmuggleChore.some((e) => e.includes('Violación de Invariante de Compuerta') && e.includes('src/calc.ts'))) {
+    throw new Error('FALLÓ MITIGACIÓN F-NEW-01: verify-gates.mjs permitió código de producción en un commit chore.');
+  }
+
+  // Caso 21 (F-NEW-02): Exclusión de __init__.py / conftest.py e Invalidación de Stale RED
+  if (isTestFile('tests/__init__.py') || isTestFile('tests/conftest.py')) {
+    throw new Error('FALLÓ MITIGACIÓN F-NEW-02: isTestFile aceptó __init__.py o conftest.py como test ejecutable.');
+  }
+  if (extractModuleName('tests/__init__.py') !== '' || extractModuleName('tests/conftest.py') !== '') {
+    throw new Error('FALLÓ MITIGACIÓN F-NEW-02: extractModuleName infirió nombre de módulo sobre __init__.py o conftest.py.');
+  }
+  const invalidStaleRed = [
+    { hash: 'stale01', subject: 'test(red)(auth): failing auth test', changedFiles: ['tests/auth.test.ts'] },
+    { hash: 'fresh02', subject: 'test(red)(billing): failing billing test', changedFiles: ['tests/billing.test.ts'] },
+    { hash: 'green03', subject: 'feat(green)(deterministic-causality-harness/auth): implement auth exploiting stale red', changedFiles: ['src/auth.ts'] }
+  ];
+  const errsStale = validateCommitList(invalidStaleRed);
+  if (!errsStale.some((e) => e.includes('no coincide con ningún test(red) activo previo'))) {
+    throw new Error('FALLÓ MITIGACIÓN F-NEW-02: verify-gates.mjs permitió explotar un RED obsoleto (stale RED) de otro ámbito.');
+  }
+
+  // Caso 22 (F-NEW-05): Rechazo estricto de referencias con prefijo '-' en isValidRefFormat
+  if (isValidRefFormat('--version') || isValidRefFormat('-u') || isValidRefFormat('--help')) {
+    throw new Error('FALLÓ MITIGACIÓN F-NEW-05: isValidRefFormat aceptó argumentos que comienzan con guión.');
+  }
+
+  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo F-NEW-01, F-NEW-02, F-NEW-05, F-02 CWE-78, F-03 Scope Spoofing) pasaron exitosamente.');
 }
 
 function checkCleanWorkingTree(allowDirty = false) {

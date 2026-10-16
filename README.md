@@ -161,7 +161,7 @@ This repository includes native root rule entrypoints so AI coding assistants lo
 │   ├── verify_red_failure.py    # Physical verification of RED failure (Python)
 │   ├── check_python_coverage.py # Independent Line & Branch coverage verifier
 │   ├── tdd-flow.mjs             # Developer ergonomics CLI (tdd:red, tdd:green, tdd:refactor)
-│   ├── redteam-audit.mjs        # Internal heuristic security & contract scanner (13 checks; not certification)
+│   ├── redteam-audit.mjs        # Internal heuristic security & contract scanner (20 checks; not certification)
 │   ├── guard-agent.mjs          # Semantic and structural contract guardian
 │   ├── setup_branch_protection.py # Automated GitHub branch protection setup
 │   └── setup-branch-protection.sh # Bash setup script for branch protection

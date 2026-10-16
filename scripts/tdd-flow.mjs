@@ -96,7 +96,8 @@ export function runRedFlow(description, dryRun = false) {
   const hasPy = testFiles.some((f) => /\.py$/.test(f));
 
   if (hasTs) {
-    const vitestBin = path.join(ROOT_DIR, 'node_modules/.bin/vitest');
+    const vitestMjs = path.join(ROOT_DIR, 'node_modules', 'vitest', 'vitest.mjs');
+    const vitestBin = fs.existsSync(vitestMjs) ? vitestMjs : path.join(ROOT_DIR, 'node_modules', '.bin', 'vitest');
     if (fs.existsSync(vitestBin)) {
       console.log(`🧪 Ejecutando Vitest sobre [${testFiles.join(', ')}]...`);
       const res = spawnSync('node', [vitestBin, 'run', '--', ...testFiles], { cwd: ROOT_DIR, encoding: 'utf8' });

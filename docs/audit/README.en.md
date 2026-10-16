@@ -18,7 +18,7 @@ This directory consolidates external and adversarial audits of the harness, alon
 | 2026-10-15 | [Independent Forensic Report (Wave 1)](2026-10-15-informe-forense-independiente.es.md) | External: replay assertion verification, branch coverage & claim cleanup | Historical (remediated in `ed6a4c3`) |
 | 2026-10-15 | [Independent Forensic Audit (Wave 2 — `ed6a4c3`)](2026-10-15-auditoria-forense-ai-engineering.es.md) | External: confirmed 5/5 green CI checks and identified `F-01` (`guard-agent.mjs`) & `F-02` (`redteam-audit.mjs`) | **Current** — 100% remediated below |
 | 2026-10-15 | [Authenticated GitHub Ruleset Snapshot](github-ruleset-main.json) | Verifiable JSON snapshot of the active Ruleset on `main` (`id: 25150565`, `enforcement: active`) | Current |
-| 2026-10-15 | [Heuristic Scanner Report](informe-redteam.es.md) | Automated (`redteam-audit.mjs`, 13 checks) | Current |
+| 2026-10-15 | [Heuristic Scanner Report](informe-redteam.es.md) | Automated (`redteam-audit.mjs`, 20 checks) | Current |
 
 ### Status of Independent Audit Findings
 
@@ -40,7 +40,7 @@ This directory consolidates external and adversarial audits of the harness, alon
 
 **What it IS NOT:**
 - A formal certification or compliance verification against external regulatory standards.
-- A compiler data-flow analyzer, generative fuzzer, automated mutation testing engine, or deep memory/HTTP auditor. The 10 domains in `redteam-audit.mjs` are 13 targeted heuristic and regression checks.
+- A compiler data-flow analyzer, generative fuzzer, automated mutation testing engine, or deep memory/HTTP auditor. The 10 domains in `redteam-audit.mjs` are 20 targeted heuristic and regression checks.
 - Cryptographic artifact provenance/attestation (for supply-chain attestations, refer to in-toto/Witness).
 - A standalone physical merge blocker: physical blocking on GitHub relies on the active Ruleset on `main` (see [`github-ruleset-main.json`](github-ruleset-main.json)).
 

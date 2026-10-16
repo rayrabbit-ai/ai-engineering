@@ -18,7 +18,7 @@ Este directorio reúne las auditorías externas y adversariales del harness y el
 | 2026-10-15 | [Informe forense independiente (Ola 1)](2026-10-15-informe-forense-independiente.es.md) | Externa: verificación de replay, cobertura de ramas y saneamiento documental | Histórico (remediado en `ed6a4c3`) |
 | 2026-10-15 | [Auditoría forense independiente (Ola 2 — `ed6a4c3`)](2026-10-15-auditoria-forense-ai-engineering.es.md) | Externa: confirmó 5/5 checks en verde y señaló `F-01` (`guard-agent.mjs`) y `F-02` (`redteam-audit.mjs`) | **Vigente** — 100 % remediado abajo |
 | 2026-10-15 | [Snapshot autenticado de GitHub Ruleset](github-ruleset-main.json) | Captura JSON verificable del Ruleset activo en `main` (`id: 25150565`, `enforcement: active`) | Vigente |
-| 2026-10-15 | [Informe del escáner heurístico](informe-redteam.es.md) | Automático (`redteam-audit.mjs`, 13 chequeos) | Vigente |
+| 2026-10-15 | [Informe del escáner heurístico](informe-redteam.es.md) | Automático (`redteam-audit.mjs`, 20 chequeos) | Vigente |
 
 ### Estado de los hallazgos de las auditorías independientes
 
@@ -40,7 +40,7 @@ Este directorio reúne las auditorías externas y adversariales del harness y el
 
 **No es:**
 - Una certificación ni una verificación conforme a estándares formales externos de cumplimiento.
-- Un motor de análisis de flujo de datos de compilador, fuzzing generativo, pruebas de mutación automáticas ni auditoría de memoria/HTTP. Los 10 dominios de `redteam-audit.mjs` son 13 chequeos heurísticos y de regresión puntuales.
+- Un motor de análisis de flujo de datos de compilador, fuzzing generativo, pruebas de mutación automáticas ni auditoría de memoria/HTTP. Los 10 dominios de `redteam-audit.mjs` son 20 chequeos heurísticos y de regresión puntuales.
 - Provenance/attestation criptográfica de artefactos (para eso ver in-toto/Witness).
 - Un bloqueo físico de merge por sí solo: el bloqueo físico en GitHub depende del Ruleset activo en la rama `main` (ver [`github-ruleset-main.json`](github-ruleset-main.json)).
 

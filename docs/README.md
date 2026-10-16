@@ -11,8 +11,9 @@ Bienvenido a la documentación oficial de **RayRabbit AI Engineering**, el está
 ### 1. 🛡️ Expediente de Seguridad y Auditorías Adversariales
 Para consultar el historial de auditorías técnicas externas y la batería heurística de seguridad (ningún documento constituye certificación formal OWASP ni SLSA):
 * **[Expediente Completo de Auditorías (`docs/audit/`)](audit/README.md)**: Historial completo de auditorías, estado de hallazgos y delimitación de alcance.
-* **[Informe Forense Independiente (Vigente)](audit/2026-10-15-informe-forense-independiente.es.md)**: Auditoría externa independiente con aprobación condicionada como plantilla SDD/TDD.
-* **[Informe de la Batería Heurística de Red Team](audit/informe-redteam.es.md)**: Batería automatizada de 12 probes heurísticos (`redteam-audit.mjs`).
+* **[Auditoría Forense Independiente (Vigente — Ola 2)](audit/2026-10-15-auditoria-forense-ai-engineering.es.md)**: Auditoría externa independiente sobre `main` con estado de remediaciones 100 % verificadas.
+* **[Informe Forense Independiente (Ola 1)](audit/2026-10-15-informe-forense-independiente.es.md)**: Evaluación externa independiente previa.
+* **[Informe del Escáner Heurístico Interno](audit/informe-redteam.es.md)**: Escáner automatizado de seguridad y contratos (`redteam-audit.mjs`, 13 chequeos).
 * **[Auditoría Técnica Externa Histórica (Copilot GPT-6 Luna)](audit/2026-10-14-auditoria-externa-copilot-luna.es.md)**: Evaluación externa original.
 
 ### 2. 🔒 Protección de Ramas y Gobernanza

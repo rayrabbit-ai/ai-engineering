@@ -48,6 +48,7 @@ export function classifyTestResult(exitCode, stdout = '', stderr = '') {
   if (exitCode === 0) {
     return {
       isRed: false,
+      isLegitimateRed: false,
       isFraud: true,
       reason: 'El test pasó exitosamente (código 0) antes de implementar el código de producción.',
     };
@@ -67,6 +68,7 @@ export function classifyTestResult(exitCode, stdout = '', stderr = '') {
     if (combined.includes(err)) {
       return {
         isRed: false,
+        isLegitimateRed: false,
         isFraud: false,
         isSyntaxError: true,
         reason: `El test contiene errores de sintaxis o importación no resuelta: ${err}`,
@@ -90,6 +92,7 @@ export function classifyTestResult(exitCode, stdout = '', stderr = '') {
     // F-01: un exit code != 0 sin evidencia de aserción (Error/TypeError/crash) NO es RED legítimo
     return {
       isRed: false,
+      isLegitimateRed: false,
       isFraud: false,
       hasAssertion: false,
       isNonAssertive: true,
@@ -99,6 +102,7 @@ export function classifyTestResult(exitCode, stdout = '', stderr = '') {
 
   return {
     isRed: true,
+    isLegitimateRed: true,
     isFraud: false,
     hasAssertion: true,
     reason: 'Fallo físico legítimo por aserción no satisfecha.',
@@ -206,6 +210,12 @@ export function selfTest() {
  * Ejecuta el replay de commits test(red) en el rango base..head.
  */
 export function verifyHistoricalReplay(baseRef, headRef) {
+  if (typeof baseRef === 'string' && baseRef.trim().startsWith('-')) {
+    throw new Error(`Referencia git base inválida (no puede comenzar con guión): '${baseRef}'`);
+  }
+  if (typeof headRef === 'string' && headRef.trim().startsWith('-')) {
+    throw new Error(`Referencia git head inválida (no puede comenzar con guión): '${headRef}'`);
+  }
   const baseSha = runGit(['rev-parse', '--verify', '--end-of-options', baseRef]);
   const headSha = runGit(['rev-parse', '--verify', '--end-of-options', headRef]);
 
@@ -257,6 +267,13 @@ export function verifyHistoricalReplay(baseRef, headRef) {
     try {
       runGit(['worktree', 'add', '--detach', tempDir, parentSha]);
 
+      // Vincular node_modules del workspace en el worktree temporal para que Vitest resuelva paquetes en os.tmpdir()
+      const rootNodeModules = path.join(ROOT_DIR, 'node_modules');
+      const tempNodeModules = path.join(tempDir, 'node_modules');
+      if (fs.existsSync(rootNodeModules) && !fs.existsSync(tempNodeModules)) {
+        fs.symlinkSync(rootNodeModules, tempNodeModules, 'junction');
+      }
+
       // Extraer diff de tests del commit RED SIN trim(): recortar el '\n' final corrompe el patch
       const diffRes = spawnSync('git', ['diff', '--binary', `${rc.hash}^`, rc.hash, '--', ...testFiles], {
         cwd: ROOT_DIR,
@@ -280,27 +297,33 @@ export function verifyHistoricalReplay(baseRef, headRef) {
         }
       }
 
-      // Ejecutar runner correspondiente
-      const hasTsTests = testFiles.some((f) => /\.(ts|js|mjs|cjs)$/.test(f));
-      const hasPyTests = testFiles.some((f) => /\.py$/.test(f));
-      if (!hasTsTests && !hasPyTests) {
+      // Ejecutar runner correspondiente filtrando archivos por lenguaje y usando delimitador '--'
+      const tsTestFiles = testFiles.filter((f) => /\.(ts|js|mjs|cjs)$/.test(f));
+      const pyTestFiles = testFiles.filter((f) => /\.py$/.test(f));
+      if (tsTestFiles.length === 0 && pyTestFiles.length === 0) {
         throw new Error(`❌ [REPLAY-SIN-RUNNER] En ${shortHash}: ningún archivo de test ejecutable (.ts/.js/.py) en [${testFiles.join(', ')}].`);
       }
 
-      if (hasTsTests) {
+      if (tsTestFiles.length > 0) {
         const vitestBin = path.join(ROOT_DIR, 'node_modules', 'vitest', 'vitest.mjs');
         if (!fs.existsSync(vitestBin)) {
           throw new Error(`❌ [REPLAY-SIN-RUNNER] En ${shortHash}: vitest no instalado (${vitestBin}). Ejecute 'npm ci'.`);
         }
-        const runRes = spawnSync('node', [vitestBin, 'run', ...testFiles], { cwd: tempDir, encoding: 'utf8' });
+        const runRes = spawnSync('node', [vitestBin, 'run', '--', ...tsTestFiles], { cwd: tempDir, encoding: 'utf8' });
         assertLegitimateRed(classifyTestResult(runRes.status, runRes.stdout, runRes.stderr), shortHash, rc.subject, 'TS');
       }
 
-      if (hasPyTests) {
-        const pyRes = spawnSync('python', ['-m', 'pytest', '-q', ...testFiles], { cwd: tempDir, encoding: 'utf8' });
+      if (pyTestFiles.length > 0) {
+        const pyRes = spawnSync('python', ['-m', 'pytest', '-q', '--', ...pyTestFiles], { cwd: tempDir, encoding: 'utf8' });
         assertLegitimateRed(classifyTestResult(pyRes.status, pyRes.stdout, pyRes.stderr), shortHash, rc.subject, 'Python');
       }
     } finally {
+      try {
+        const tempNodeModules = path.join(tempDir, 'node_modules');
+        if (fs.existsSync(tempNodeModules)) fs.unlinkSync(tempNodeModules);
+      } catch {
+        // Ignorar si no existe el enlace
+      }
       // Limpieza segura del worktree temporal
       runGitSafe(['worktree', 'remove', '--force', tempDir]);
       try {

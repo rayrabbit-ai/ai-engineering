@@ -57,6 +57,9 @@ Como **agente auditor autónomo (LLM)**, debes guiar tu inspección utilizando l
    - Tolerancia Cero a mocks, stubs o datos sintéticos en código de producción o validadores de seguridad.
    - Tolerancia Cero a `os.path` o alteración de `sys.path` en Python (exigir `pathlib.Path` e `importlib.resources`, Invariante 11).
    - Tolerancia Cero a hallazgos hardcodeados o desincronizados dentro de scripts de auditoría.
+5. **Mandato de Descubrimiento Hostil Exhaustivo (Prohibición de Sesgo de Confirmación):**
+   - **Nunca limites tu auditoría a la lista de puntos que te pida verificar el coordinador.** Aunque te pidan verificar `F-01` y `F-02`, tienes la obligación de auditar de forma autónoma y hostil **los 11 scripts del directorio `scripts/`** (`verify-gates.mjs`, `verify_gates.py`, `verify-historical-replay.mjs`, `verify-red-failure.mjs`, `verify_red_failure.py`, `guard-agent.mjs`, `redteam-audit.mjs`, `tdd-flow.mjs`, `check_python_coverage.py`, `setup_branch_protection.py`, `setup-branch-protection.sh`) y los archivos de configuración (`vitest.config.ts`, `pyproject.toml`, `package.json`, `.github/workflows/*.yml`).
+   - En cada script auxiliar debes inyectar entradas malformadas o vacías (por ejemplo: pasar un JSON vacío `{}` o ruta inexistente a `check_python_coverage.py`, forzar `--coverage.thresholds.lines=99` en `vitest`, pasar `ZeroDivisionError` con `assert` en el código fuente a `verify_red_failure.py`, o verificar la resolución de `node_modules` dentro del `git worktree` temporal de `verify-historical-replay.mjs`).
 
 ---
 

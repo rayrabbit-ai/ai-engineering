@@ -235,7 +235,7 @@ async function auditDomain1SubprocessAndCliProbes(repoFiles) {
 
   if (fs.existsSync(nodeGate)) {
     const canaryPayload = 'HEAD; printf "REDTEAM_NODE_CANARY_78|test(red): fake_injected"';
-    const probe = runSafeCommand('node', ['scripts/verify-gates.mjs', '--base', canaryPayload, '--head', 'HEAD']);
+    const probe = runSafeCommand('node', ['scripts/verify-gates.mjs', '--allow-dirty', '--base', canaryPayload, '--head', 'HEAD']);
     const nodeLines = probe.stdout.split('\n').map((l) => l.trim());
     const canaryExecutedNode = nodeLines.some((l) => l.startsWith('REDTEAM_NODE_CANARY_78') || l.includes('fake_injected'));
     if (probe.status === 0 && canaryExecutedNode) {
@@ -254,7 +254,7 @@ async function auditDomain1SubprocessAndCliProbes(repoFiles) {
       });
     }
 
-    const argProbe = runSafeCommand('node', ['scripts/verify-gates.mjs', '--base', '--version', '--head', 'HEAD']);
+    const argProbe = runSafeCommand('node', ['scripts/verify-gates.mjs', '--allow-dirty', '--base', '--version', '--head', 'HEAD']);
     if (argProbe.status === 0) {
       registerFinding({
         title: 'Argument Injection / Fail-Open ante flags de Git en verify-gates.mjs',
@@ -274,7 +274,7 @@ async function auditDomain1SubprocessAndCliProbes(repoFiles) {
 
   if (fs.existsSync(pyGate)) {
     const pyCanary = 'HEAD; printf "REDTEAM_PY_CANARY_78|test(red): fake_injected"';
-    const pyProbe = runSafeCommand(PYTHON_BIN, ['scripts/verify_gates.py', '--base', pyCanary, '--head', 'HEAD']);
+    const pyProbe = runSafeCommand(PYTHON_BIN, ['scripts/verify_gates.py', '--allow-dirty', '--base', pyCanary, '--head', 'HEAD']);
     const pyLines = pyProbe.stdout.split('\n').map((l) => l.trim());
     const canaryExecutedPy = pyLines.some((l) => l.startsWith('REDTEAM_PY_CANARY_78') || l.includes('fake_injected'));
     if (pyProbe.status === 0 && canaryExecutedPy) {
@@ -290,6 +290,23 @@ async function auditDomain1SubprocessAndCliProbes(repoFiles) {
         pocOutput: `${pyProbe.stdout}\n${pyProbe.stderr}`,
         remediation:
           'Usar `subprocess.run(["git", ...], shell=False, check=True)` y validar las referencias antes de construir el rango.',
+      });
+    }
+
+    const pyArgProbe = runSafeCommand(PYTHON_BIN, ['scripts/verify_gates.py', '--allow-dirty', '--base', '--version', '--head', 'HEAD']);
+    if (pyArgProbe.status === 0) {
+      registerFinding({
+        title: 'Argument Injection / Fail-Open ante flags de Git en verify_gates.py',
+        severity: 'Alta',
+        cwe: 'CWE-88: Improper Neutralization of Argument Delimiters in a Command',
+        category: 'D1: Subprocess & CLI Security',
+        location: 'scripts/verify_gates.py',
+        mechanism:
+          'El validador acepta una referencia `--base` que comienza con `--` (flag de Git) o falla silenciosamente devolviendo `exit 0`.',
+        pocCommand: pyArgProbe.displayCmd,
+        pocOutput: `Exit code: ${pyArgProbe.status}\n${pyArgProbe.stdout}`,
+        remediation:
+          'Rechazar cualquier referencia `--base` o `--head` que comience con `-` y verificar su existencia con `git rev-parse --verify --quiet "${ref}^{commit}"`.',
       });
     }
   }
@@ -672,10 +689,10 @@ async function auditDomain6CiCdWorkflows() {
 }
 
 // ============================================================================
-// CATEGORÍA 7: MATRIZ DE PARIDAD POLÍGLOTA (7 VECTORES FIJOS: NODE VS PYTHON)
+// CATEGORÍA 7: MATRIZ DE PARIDAD POLÍGLOTA (8 VECTORES FIJOS: NODE VS PYTHON)
 // ============================================================================
 async function auditDomain7PolyglotGateParity() {
-  console.log('🔍 [D7] Ejecutando matriz de paridad políglota (7 vectores de regresión) contra verify-gates (Node vs. Python)...');
+  console.log('🔍 [D7] Ejecutando matriz de paridad políglota (8 vectores de regresión) contra verify-gates (Node vs. Python)...');
 
   const nodeGatePath = path.join(ROOT_DIR, 'scripts/verify-gates.mjs');
   const pyGatePath = path.join(ROOT_DIR, 'scripts/verify_gates.py');
@@ -778,6 +795,16 @@ async function auditDomain7PolyglotGateParity() {
       commits: [
         { hash: 'red0007', subject: 'test(red)(math-engine/calculator): add failing division test', changedFiles: ['tests/test_calculator.py'] },
         { hash: 'green07', subject: 'feat(green)(math-engine/calculator): implement division', changedFiles: ['src/calculator.py'] },
+      ],
+    },
+    {
+      id: 'V-08',
+      name: 'Contrabando de Código de Producción en Commits No-Código (docs/chore/spec -> src/calculator.ts)',
+      shouldReject: true,
+      cwe: 'CWE-284: Improper Access Control / Gate Bypass (F-NEW-01)',
+      severity: 'Alta',
+      commits: [
+        { hash: 'smg0001', subject: 'docs: update documentation and smuggle production code', changedFiles: ['README.md', 'src/calculator.ts'] },
       ],
     },
   ];
@@ -999,6 +1026,77 @@ async function auditDomain9CoverageAndE2E() {
         pocOutput: `Línea ${line}: ejecuta solo legacy_baseline y 'unit or integration'`,
         remediation: 'Incluir `pytest -m e2e` en el job de CI.',
       });
+    }
+
+    // Probe Fail-Closed sobre check_python_coverage.py con JSON vacío {}
+    if (fs.existsSync(checkerPath)) {
+      const tmpCovFile = path.join(os.tmpdir(), `redteam-empty-cov-${process.pid}.json`);
+      try {
+        fs.writeFileSync(tmpCovFile, '{}', 'utf8');
+        const emptyCovRes = runSafeCommand(PYTHON_BIN, ['scripts/check_python_coverage.py', tmpCovFile]);
+        if (emptyCovRes.status === 0) {
+          registerFinding({
+            title: 'Comportamiento Fail-Open en check_python_coverage.py ante JSON de cobertura vacío ({})',
+            severity: 'Alta',
+            cwe: 'CWE-636: Not Failing Securely (Failing Open)',
+            category: 'D9: Coverage & E2E Gates',
+            location: 'scripts/check_python_coverage.py',
+            mechanism:
+              'Al recibir un archivo JSON vacío (`{}`) o con `num_statements: 0`, `check_python_coverage.py` asumía 100.0% de cobertura y terminaba con exit code 0.',
+            pocCommand: `${PYTHON_BIN} scripts/check_python_coverage.py <empty.json>`,
+            pocOutput: emptyCovRes.stdout,
+            remediation: 'Rechazar en modo fail-closed (exit 1) cualquier informe sin bloque `totals` o con `num_statements <= 0`.',
+          });
+        }
+      } finally {
+        fs.rmSync(tmpCovFile, { force: true });
+      }
+    }
+  }
+
+  // Verificar que vitest.config.ts defina thresholds anidados para Vitest >= 1.x / 5.x
+  const vitestCfgPath = path.join(ROOT_DIR, 'vitest.config.ts');
+  if (fs.existsSync(vitestCfgPath)) {
+    const vitestTxt = fs.readFileSync(vitestCfgPath, 'utf8');
+    if (!/thresholds\s*:\s*\{[\s\S]*?lines\s*:\s*80[\s\S]*?branches\s*:\s*75/m.test(vitestTxt)) {
+      registerFinding({
+        title: 'vitest.config.ts no define bloque anidado thresholds para Vitest 5.x',
+        severity: 'Media',
+        cwe: 'CWE-693: Protection Mechanism Failure',
+        category: 'D9: Coverage & E2E Gates',
+        location: 'vitest.config.ts',
+        mechanism:
+          'En Vitest >=1.0 / 5.x, los umbrales de cobertura deben declararse bajo `coverage.thresholds: { lines: 80, branches: 75 }`; las claves de nivel superior son ignoradas.',
+        pocCommand: 'npx vitest run --coverage --coverage.lines=99',
+        pocOutput: 'Vitest ignora coverage.lines en nivel superior si no está bajo coverage.thresholds',
+        remediation: 'Declarar `thresholds: { lines: 80, branches: 75, functions: 80, statements: 80 }` en `vitest.config.ts`.',
+      });
+    }
+  }
+
+  // Ejecutar autochequeos de replay, verificadores RED y tdd-flow
+  const extraSelfTests = [
+    ['node', ['scripts/verify-historical-replay.mjs', '--self-test']],
+    ['node', ['scripts/verify-red-failure.mjs', '--self-test']],
+    [PYTHON_BIN, ['scripts/verify_red_failure.py', '--self-test']],
+    ['node', ['scripts/tdd-flow.mjs', '--self-test']],
+  ];
+  for (const [bin, args] of extraSelfTests) {
+    if (fs.existsSync(path.join(ROOT_DIR, args[0]))) {
+      const stRes = runSafeCommand(bin, args);
+      if (stRes.status !== 0) {
+        registerFinding({
+          title: `Fallo en autochequeo de compuerta auxiliar: ${args.join(' ')}`,
+          severity: 'Alta',
+          cwe: 'CWE-693: Protection Mechanism Failure',
+          category: 'D9: Coverage & E2E Gates',
+          location: args[0],
+          mechanism: `El comando \`${bin} ${args.join(' ')}\` terminó con código ${stRes.status}.`,
+          pocCommand: `${bin} ${args.join(' ')}`,
+          pocOutput: `${stRes.stdout}\n${stRes.stderr}`,
+          remediation: 'Corregir las regresiones reportadas por el self-test.',
+        });
+      }
     }
   }
 }

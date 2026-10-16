@@ -67,7 +67,7 @@
     "@fission-ai/openspec": "0.17.2",
     "@types/node": "24.19.2",
     "@vitest/coverage-v8": "5.0.4",
-    "typescript": "^5.3.3",
+    "typescript": "^7.0.2",
     "vitest": "5.0.4"
   }
 }

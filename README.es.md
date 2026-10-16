@@ -7,6 +7,9 @@
 [![TDD Strict](https://img.shields.io/badge/Methodology-SDD%20%2B%20Strict%20TDD-orange.svg)](.agent/rules/INVARIANTS.md)
 [![TypeScript](https://img.shields.io/badge/Stack-TypeScript%20%7C%20Python-blueviolet.svg)](#stacks-soportados-fuera-de-la-caja)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Auditoría GPT-6 Luna](https://img.shields.io/badge/GitHub%20GPT--6%20Luna-APROBADO%20%2F%20APPROVED-brightgreen?style=for-the-badge&logo=github)](docs/audit/2026-10-16-auditoria-forense-67a2eef.es-en.md)
+[![Adversarial Auditor](https://img.shields.io/badge/Adversarial%20Auditor-APROBADO-brightgreen?style=for-the-badge&logo=shield)](docs/audit/2026-10-16-auditoria-adversarial-hostil.es.md)
+[![Branch Protection Ruleset](https://img.shields.io/badge/Ruleset%2025150565-ACTIVE-blue?style=for-the-badge&logo=github)](docs/audit/github-ruleset-main.json)
 
 > **Repositorio Template Oficial de RayRabbit AI**  
 > *Deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + scope-coupled TDD commit causality + dual-mode autonomy (Invariant vs HITL) to curb "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
@@ -34,13 +37,29 @@ Este template fusiona **Spec-Driven Development (OpenSpec)** con **Test-Driven D
 7. **CLI de Ergonomía para Flujo TDD**: Comandos unificados (`npm run tdd:red`, `npm run tdd:green`, `npm run tdd:refactor` mediante [`tdd-flow.mjs`](scripts/tdd-flow.mjs)) que automatizan aserciones, deducción de ámbitos y creación de commits.
 8. **Auditoría Adversarial y Guard Integrados**: Validación pre-push y en CI mediante [`guard-agent`](scripts/guard-agent.mjs), el subagente [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.es.md) y [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
-> 🔬 **Evidencia Empírica y Auditoría Hostil de IA**: Lee nuestro [Caso de Estudio: Benchmark A/B en Vivo](./docs/ab-testing-and-coverage.es.md) donde documentamos cómo un agente sin restricciones cae en *"La Ilusión de TDD"* y es bloqueado por las compuertas de CI.
->
-> 📸 **Sometido a Estrés Adversarial en Vivo**: En lugar de confiar en promesas teóricas, esta plantilla fue sometida a pruebas adversariales hostiles en GitHub Codespaces mediante modelos de frontera (GitHub Copilot / GPT-6 Luna) con la instrucción explícita de romper el arnés y buscar exploits. Los hallazgos y su estado de remediación están documentados (consulta el [Expediente de Auditorías](./docs/audit/README.md)).
+> 🏆 **Certificación y Aprobación Forense en Vivo (Commit `67a2eef`)**:
+> Tras someter el arnés a iteraciones continuas entre nuestro validador subagente (`adversarial_auditor`) y el modelo de frontera de GitHub (**GPT-6 Luna** en Codespaces), el repositorio obtuvo el dictamen oficial **APROBADO / APPROVED**:
+> * **10/10 checks de CI en verde** bajo el Ruleset de Branch Protection `25150565`.
+> * **Fuzzing diferencial de 10.067 rutas** sin discrepancias de paridad entre Node.js y Python.
+> * **2 mutantes dirigidos detectados** y 0 vulnerabilidades en `npm audit`.
+> * Consulta el [Informe Forense Completo](./docs/audit/2026-10-16-auditoria-forense-67a2eef.es-en.md) y el [Expediente de Auditorías](./docs/audit/README.md).
 >
 > <p align="center">
->   <img src="docs/assets/codespaces-adversarial-copilot-audit.png" alt="Auditoría Adversarial en Vivo en GitHub Codespaces" width="850"/>
+>   <a href="docs/audit/2026-10-16-auditoria-forense-67a2eef.es-en.md">
+>     <img src="docs/audit/assets/codespaces-luna-audit-67a2eef.png" alt="Auditoría Forense de GPT-6 Luna en GitHub Codespaces - Dictamen APROBADO" width="900"/>
+>   </a>
 > </p>
+>
+> ### ⏱️ Línea de Tiempo de Mejora Continua (PR #18 a PR #21)
+>
+> | Iteración | Auditor | Veredicto | Aporte Técnico Clave |
+> | :--- | :--- | :---: | :--- |
+> | **PR #18** (`a95896c`) | GitHub GPT-6 Luna | **RECHAZADO** | Detección de brechas F-01 a F-05 (rutas `src/tests/`, config crítica en `docs:`, orden de CI). |
+> | **PR #19** (`#19`) | `adversarial_auditor` | **GREEN** | Umbrales anidados en Vitest 5.0.4 y cobertura Python fail-closed. |
+> | **PR #20** (`#20`) | `adversarial_auditor` | **GREEN** | Escáner Red Team ampliado a 18 probes con inyección activa y worktrees aislados. |
+> | **PR #21** (`67a2eef`) | `adversarial_auditor` & **GPT-6 Luna** | **APROBADO** | **Remediación de Raíz:** Single-Source Path Policy (`path-policy.json`), Invariantes I1–I5 (`verify-policy-coherence.mjs`), mitigación de vectores C1–C6 y Vitest `pool: 'vmThreads'`. |
+>
+> 🎯 **Próximo Hito Estratégico:** *Ingeniería de Seguridad (OWASP ASVS L3, OWASP LLM Top 10, CWE Top 25, SLSA L3, MITRE ATT&CK/ATLAS) como guía formal de auto-inspección del agente LLM, orientada a la atribución de certificaciones formales verificables.*
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐

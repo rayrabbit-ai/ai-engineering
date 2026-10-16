@@ -7,6 +7,9 @@
 [![TDD Strict](https://img.shields.io/badge/Methodology-SDD%20%2B%20Strict%20TDD-orange.svg)](.agent/rules/INVARIANTS.md)
 [![TypeScript](https://img.shields.io/badge/Stack-TypeScript%20%7C%20Python-blueviolet.svg)](#supported-stacks)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GPT-6 Luna Audit](https://img.shields.io/badge/GitHub%20GPT--6%20Luna-APROBADO%20%2F%20APPROVED-brightgreen?style=for-the-badge&logo=github)](docs/audit/2026-10-16-auditoria-forense-67a2eef.es-en.md)
+[![Adversarial Auditor](https://img.shields.io/badge/Adversarial%20Auditor-APPROVED-brightgreen?style=for-the-badge&logo=shield)](docs/audit/2026-10-16-auditoria-adversarial-hostil.es.md)
+[![Branch Protection Ruleset](https://img.shields.io/badge/Ruleset%2025150565-ACTIVE-blue?style=for-the-badge&logo=github)](docs/audit/github-ruleset-main.json)
 
 > **Official RayRabbit AI Template Repository**  
 > *Deterministic AI engineering harness with CI-enforced Git commit gates. Fuses Spec-Driven Development (OpenSpec) + scope-coupled TDD commit causality + dual-mode autonomy (Invariant vs HITL) to curb "vibe coding" for Antigravity, Cursor, Claude Code and more. Polyglot (TS/Python).*
@@ -34,13 +37,29 @@ This template fuses **Spec-Driven Development (OpenSpec)** with **Strict Test-Dr
 7. **Developer Ergonomics TDD CLI**: High-velocity CLI helpers (`npm run tdd:red`, `npm run tdd:green`, `npm run tdd:refactor` via [`tdd-flow.mjs`](scripts/tdd-flow.mjs)) automate test verification, scope deduction, and commit construction.
 8. **Built-in Adversarial Audit & Guard**: Pre-push and CI enforcement via [`guard-agent`](scripts/guard-agent.mjs), [`adversarial_auditor`](.agent/rules/ADVERSARIAL_AUDITOR.md), and [`/opsx-audit`](.agent/workflows/opsx-audit.md).
 
-> 🔬 **Empirical Evidence & Hostile AI Auditing**: Read our [Live A/B Benchmark Case Study](./docs/ab-testing-and-coverage.md) documenting how an unconstrained agent falls into the *"TDD Illusion"* and gets blocked by the CI gate validator.
->
-> 📸 **Battle-Tested Under Live Adversarial Stress**: Rather than relying on theoretical claims, this template was subjected to live adversarial stress-testing in GitHub Codespaces by frontline AI models (GitHub Copilot / GPT-6 Luna) prompted to actively exploit edge cases and break gates. Findings and their remediation status are documented (see [Audit Dossier](./docs/audit/README.en.md)).
+> 🏆 **Live Forensic Certification & Approval (Commit `67a2eef`)**:
+> Following continuous assessment cycles between our subagent validator (`adversarial_auditor`) and GitHub's frontier model (**GPT-6 Luna** in Codespaces), the repository was officially granted an **APROBADO / APPROVED** verdict:
+> * **10/10 green CI checks** under active Branch Protection Ruleset `25150565`.
+> * **10,067-path differential fuzzing** with zero parity mismatches between Node.js and Python.
+> * **2 targeted mutants caught** and 0 vulnerabilities in `npm audit`.
+> * Read the [Full Forensic Security Report](./docs/audit/2026-10-16-auditoria-forense-67a2eef.es-en.md) and the [Audit Dossier](./docs/audit/README.en.md).
 >
 > <p align="center">
->   <img src="docs/assets/codespaces-adversarial-copilot-audit.png" alt="Live Adversarial Audit in GitHub Codespaces" width="850"/>
+>   <a href="docs/audit/2026-10-16-auditoria-forense-67a2eef.es-en.md">
+>     <img src="docs/audit/assets/codespaces-luna-audit-67a2eef.png" alt="GPT-6 Luna Forensic Audit in GitHub Codespaces - APPROVED Verdict" width="900"/>
+>   </a>
 > </p>
+>
+> ### ⏱️ Continuous Improvement Timeline (PR #18 to PR #21)
+>
+> | Iteration | Auditor | Verdict | Key Technical Contribution |
+> | :--- | :--- | :---: | :--- |
+> | **PR #18** (`a95896c`) | GitHub GPT-6 Luna | **REJECTED** | Uncovered findings F-01 to F-05 (`src/tests/` route classification, critical config in `docs:`, CI execution order). |
+> | **PR #19** (`#19`) | `adversarial_auditor` | **GREEN** | Nested thresholds block in Vitest 5.0.4 and fail-closed Python coverage. |
+> | **PR #20** (`#20`) | `adversarial_auditor` | **GREEN** | Red Team scanner expanded to 18 active injection probes and isolated worktrees. |
+> | **PR #21** (`67a2eef`) | `adversarial_auditor` & **GPT-6 Luna** | **APPROVED** | **Root Remediation:** Single-Source Path Policy (`path-policy.json`), Invariants I1–I5 (`verify-policy-coherence.mjs`), vectors C1–C6 mitigation, and Vitest `pool: 'vmThreads'`. |
+>
+> 🎯 **Next Strategic Milestone:** *Security Engineering (OWASP ASVS L3, OWASP LLM Top 10, CWE Top 25, SLSA L3, MITRE ATT&CK/ATLAS) as a formal LLM agent inspection guide, aiming toward verifiable compliance certifications.*
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐

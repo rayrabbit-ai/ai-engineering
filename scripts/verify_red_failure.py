@@ -10,6 +10,7 @@ rechazando explícitamente errores de sintaxis, colección, importación o confi
 
 import sys
 import re
+import importlib.util
 import subprocess
 from pathlib import Path
 
@@ -27,18 +28,29 @@ def run_git(args: list[str]) -> list[str]:
         return [l.strip() for l in res.stdout.splitlines() if l.strip()]
     return []
 
+def run_git_z(args: list[str]) -> list[str]:
+    res = subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", shell=False)
+    if res.returncode == 0 and res.stdout:
+        return [l.strip() for l in res.stdout.split("\x00") if l.strip()]
+    return []
+
+def _load_verify_gates():
+    spec = importlib.util.spec_from_file_location("verify_gates", Path(__file__).resolve().parent / "verify_gates.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+_VERIFY_GATES = _load_verify_gates()
+_RUNNER_EXTENSIONS = re.compile(r"\.(ts|tsx|js|mjs|cjs|py)$", re.IGNORECASE)
+
 def is_executable_test_file(file_path: str) -> bool:
-    if not file_path:
-        return False
-    norm = file_path.replace("\\", "/").lower()
-    if not re.search(r"\.(ts|tsx|js|mjs|cjs|py)$", norm, re.IGNORECASE):
-        return False
-    return "tests/" in norm or "test/" in norm or ".spec." in norm or ".test." in norm
+    # Política única (scripts/path-policy.json): mismo criterio que verify_gates, verify-gates.mjs y el replay.
+    return bool(file_path) and _VERIFY_GATES.is_test_file(file_path) and bool(_RUNNER_EXTENSIONS.search(file_path))
 
 def get_test_files() -> list[str]:
-    files = [f for f in run_git(["diff", "--cached", "--name-only"]) if is_executable_test_file(f)]
+    files = [f for f in run_git_z(["diff", "--cached", "--name-only", "--no-renames", "-z"]) if is_executable_test_file(f)]
     if not files:
-        files = [f for f in run_git(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]) if is_executable_test_file(f)]
+        files = [f for f in run_git_z(["diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "--no-renames", "-z", "HEAD"]) if is_executable_test_file(f)]
     return files
 
 def has_syntax_or_collection_error(output: str) -> bool:
@@ -76,6 +88,8 @@ def self_test() -> int:
     assert not is_executable_test_file("tests/foo.txt"), "is_executable_test_file aceptó tests/foo.txt"
     assert is_executable_test_file("tests/unit/test_calc.py"), "is_executable_test_file rechazó tests/unit/test_calc.py"
     assert is_executable_test_file("tests/unit/calc.spec.ts"), "is_executable_test_file rechazó tests/unit/calc.spec.ts"
+    assert not is_executable_test_file("src/tests/calc.ts"), "is_executable_test_file aceptó src/tests/calc.ts (producción disfrazada de test)"
+    assert not is_executable_test_file("latest/x.ts"), "is_executable_test_file aceptó 'latest/x.ts' por substring 'test/'"
     assert not has_legitimate_assertion_failure("RuntimeError: setup fail"), "has_legitimate_assertion_failure aceptó error genérico"
     assert not has_legitimate_assertion_failure("    assert x == 1\nZeroDivisionError: division by zero"), "has_legitimate_assertion_failure aceptó ZeroDivisionError con código fuente assert"
     assert has_legitimate_assertion_failure("AssertionError: assert 5 == 10"), "has_legitimate_assertion_failure rechazó AssertionError"

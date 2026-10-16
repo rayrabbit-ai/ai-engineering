@@ -50,6 +50,8 @@
     "verify:red:py:self-test": "python scripts/verify_red_failure.py --self-test",
     "verify:replay": "node scripts/verify-historical-replay.mjs",
     "verify:replay:self-test": "node scripts/verify-historical-replay.mjs --self-test",
+    "verify:policy": "node scripts/verify-policy-coherence.mjs",
+    "verify:policy:self-test": "node scripts/verify-policy-coherence.mjs --self-test",
     "tdd:red": "node scripts/tdd-flow.mjs red",
     "tdd:green": "node scripts/tdd-flow.mjs green",
     "tdd:refactor": "node scripts/tdd-flow.mjs refactor",

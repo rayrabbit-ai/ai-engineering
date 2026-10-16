@@ -1,0 +1,31 @@
+{
+  "$comment": "Fuente única de verdad de la clasificación de rutas del harness. Leída por verify-gates.mjs, verify_gates.py, verify-red-failure.mjs, verify_red_failure.py y verify-historical-replay.mjs. Regla de zona: el PRIMER segmento de directorio que sea un marcador decide la zona (prod | test | excluded). Un archivo bajo un marcador de producción es SIEMPRE producción, sin importar nombre o directorios posteriores (fail-closed). Cualquier cambio aquí es una modificación de compuerta y exige CODEOWNERS. Las regex deben ser compatibles con JavaScript y Python (sin lookbehind ni flags inline).",
+  "productionRoots": ["src", "lib", "app", "pkg"],
+  "testRoots": ["tests", "test", "__tests__"],
+  "excludedRoots": ["openspec", "docs", "scripts", ".agent", ".github", ".cursor", ".git", "node_modules", "dist", "coverage"],
+  "nonTestBasenames": ["__init__.py", "conftest.py"],
+  "executableExtensions": ["ts", "tsx", "js", "mjs", "cjs", "jsx", "mts", "cts", "py", "go", "rs", "java", "kt", "c", "cpp", "h", "cs", "rb", "php", "swift", "scala", "sh", "vue", "svelte", "ps1", "bat", "sql"],
+  "docOnlyExtensions": ["md", "txt"],
+  "testNamePatterns": [
+    "\\.spec\\.[a-z0-9]+$",
+    "\\.test\\.[a-z0-9]+$",
+    "_test\\.[a-z0-9]+$",
+    "(^|/)test_[a-z0-9_-]+\\.[a-z0-9]+$"
+  ],
+  "configFilePatterns": ["\\.config\\.[a-z0-9]+$"],
+  "criticalConfigPatterns": [
+    "(^|/)\\.github/",
+    "(^|/)scripts/",
+    "(^|/)\\.agent/(rules|workflows)/",
+    "(^|/)openspec/config\\.ya?ml$",
+    "(^|/)package(-lock)?\\.json$",
+    "(^|/)(pnpm-lock\\.yaml|yarn\\.lock|\\.npmrc)$",
+    "(^|/)pyproject\\.toml$",
+    "(^|/)(setup\\.cfg|pytest\\.ini|tox\\.ini)$",
+    "(^|/)requirements[^/]*\\.txt$",
+    "(^|/)tsconfig[^/]*\\.json$",
+    "(^|/)vitest\\.config\\.[a-z0-9]+$",
+    "(^|/)Dockerfile[^/]*$",
+    "(^|/)Makefile$"
+  ]
+}

@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 export const VALID_PREFIXES = [
   /^test\(red\)(\([a-z0-9_/-]+\))?:/i,
@@ -49,43 +50,102 @@ export const LEGACY_BASELINE_PATTERNS = [
   /baseline\//i,
 ];
 
+/**
+ * Política de clasificación de rutas: UNA sola fuente de verdad (scripts/path-policy.json),
+ * compartida con verify_gates.py, verify-red-failure.mjs, verify_red_failure.py y el replay.
+ * La paridad Node/Python se verifica ejecutando la misma tabla (scripts/path-policy.fixtures.json).
+ */
+const POLICY_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'path-policy.json');
+export const PATH_POLICY = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf-8'));
+
+const PRODUCTION_ROOTS = new Set(PATH_POLICY.productionRoots);
+const TEST_ROOTS = new Set(PATH_POLICY.testRoots);
+const EXCLUDED_ROOTS = new Set(PATH_POLICY.excludedRoots);
+const NON_TEST_BASENAMES = new Set(PATH_POLICY.nonTestBasenames);
+const EXECUTABLE_EXTENSIONS = new Set(PATH_POLICY.executableExtensions);
+const DOC_ONLY_EXTENSIONS = new Set(PATH_POLICY.docOnlyExtensions);
+const TEST_NAME_PATTERNS = PATH_POLICY.testNamePatterns.map((p) => new RegExp(p, 'i'));
+const CONFIG_FILE_PATTERNS = PATH_POLICY.configFilePatterns.map((p) => new RegExp(p, 'i'));
+const CRITICAL_CONFIG_PATTERNS = PATH_POLICY.criticalConfigPatterns.map((p) => new RegExp(p, 'i'));
+
+const HOMOGLYPH_MAP = {
+  '\u0455': 's', '\u0441': 'c', '\u0430': 'a', '\u0435': 'e', '\u043e': 'o', '\u0440': 'p', '\u0445': 'x', '\u0456': 'i', '\u0458': 'j'
+};
+const HOMOGLYPH_REGEX = /[\u0455\u0441\u0430\u0435\u043e\u0440\u0445\u0456\u0458]/g;
+
+export function foldHomoglyphs(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str.replace(HOMOGLYPH_REGEX, (ch) => HOMOGLYPH_MAP[ch] || ch);
+}
+
+export function normalizeRepoPath(filePath) {
+  if (!filePath || typeof filePath !== 'string') return '';
+  return filePath
+    .normalize('NFC')
+    .replace(/\\/g, '/')
+    .toLowerCase()
+    .replace(/\/{2,}/g, '/')
+    .replace(/^(?:\.\/)+/, '')
+    .replace(/^\/+/, '');
+}
+
+function fileExtension(norm) {
+  const base = norm.split('/').pop();
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(dot + 1) : '';
+}
+
+/**
+ * Zona de una ruta: el PRIMER segmento de directorio que sea un marcador decide.
+ * Así 'src/tests/x.ts' es producción (src gana) y 'docs/src/x.ts' es excluida (docs gana).
+ * @returns {'prod'|'test'|'excluded'|null}
+ */
+export function classifyZone(filePath) {
+  const norm = normalizeRepoPath(filePath);
+  const dirs = norm.split('/').slice(0, -1);
+  for (const rawSegment of dirs) {
+    const segment = foldHomoglyphs(rawSegment);
+    if (PRODUCTION_ROOTS.has(segment)) return 'prod';
+    if (TEST_ROOTS.has(segment)) return 'test';
+    if (EXCLUDED_ROOTS.has(segment)) return 'excluded';
+  }
+  return null;
+}
+
 export function isTestFile(filePath) {
-  if (!filePath) return false;
-  const norm = filePath.replace(/\\/g, '/').toLowerCase();
-  const baseName = norm.split('/').pop();
-  if (baseName === '__init__.py' || baseName === 'conftest.py') return false;
-  // Debe tener una extensión ejecutable de código de pruebas
-  if (!/\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$/i.test(norm)) return false;
-  if (norm.startsWith('tests/') || norm.startsWith('test/') || norm.includes('/tests/') || norm.includes('/test/')) return true;
-  if (/(\.spec|\.test|_test)\.[a-z0-9]+$/i.test(norm)) return true;
-  if (/(?:^|\/)test_[a-z0-9_-]+\.[a-z0-9]+$/i.test(norm)) return true;
-  return false;
+  const norm = normalizeRepoPath(filePath);
+  if (!norm) return false;
+  if (NON_TEST_BASENAMES.has(norm.split('/').pop())) return false;
+  if (!EXECUTABLE_EXTENSIONS.has(fileExtension(norm))) return false;
+  const zone = classifyZone(norm);
+  if (zone === 'prod' || zone === 'excluded') return false;
+  if (zone === 'test') return true;
+  return TEST_NAME_PATTERNS.some((pattern) => pattern.test(norm));
 }
 
 export function isProductionFile(filePath) {
-  if (!filePath) return false;
-  const norm = filePath.replace(/\\/g, '/').toLowerCase();
-  // Un archivo de test jamás es código de producción
+  const norm = normalizeRepoPath(filePath);
+  if (!norm) return false;
+  const zone = classifyZone(norm);
+  // Fail-closed: todo lo que vive bajo una raíz de producción es producción, salvo documentación pura.
+  if (zone === 'prod') return !DOC_ONLY_EXTENSIONS.has(fileExtension(norm));
+  if (zone === 'test' || zone === 'excluded') return false;
   if (isTestFile(norm)) return false;
-  // Excluir specs, documentación, scripts de soporte, dotfiles y configs (soportando monorepos y subcarpetas)
-  if (
-    norm.startsWith('openspec/') || norm.includes('/openspec/') ||
-    norm.startsWith('docs/') || norm.includes('/docs/') ||
-    norm.startsWith('scripts/') || norm.includes('/scripts/') ||
-    norm.startsWith('.agent/') || norm.includes('/.agent/') ||
-    norm.startsWith('.github/') || norm.includes('/.github/') ||
-    norm.startsWith('.cursor/') || norm.includes('/.cursor/') ||
-    norm.startsWith('.git/') || norm.includes('/.git/') ||
-    norm.includes('node_modules/') || norm.includes('dist/') || norm.includes('coverage/')
-  ) return false;
-  if (norm.endsWith('.md') || norm.endsWith('.json') || norm.endsWith('.yaml') || norm.endsWith('.yml') || norm.endsWith('.toml') || norm.endsWith('.txt') || norm.endsWith('.lock') || norm.endsWith('.ini')) return false;
-  if (norm.endsWith('.config.ts') || norm.endsWith('.config.js') || norm.endsWith('.config.mjs') || norm.endsWith('.config.cjs')) return false;
-  if (norm === '.gitignore' || norm.endsWith('/.gitignore') || norm === 'license' || norm.endsWith('/license')) return false;
-  // Todo archivo bajo src/, lib/, app/, pkg/
-  if (norm.startsWith('src/') || norm.includes('/src/') || norm.startsWith('lib/') || norm.includes('/lib/') || norm.startsWith('app/') || norm.includes('/app/')) return true;
-  // Archivo de código fuente ejecutable fuera de directorios excluidos
-  if (/\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$/i.test(norm)) return true;
-  return false;
+  if (CONFIG_FILE_PATTERNS.some((pattern) => pattern.test(norm))) return false;
+  return EXECUTABLE_EXTENSIONS.has(fileExtension(norm));
+}
+
+/**
+ * Configuración crítica (CI, compuertas, reglas, manifiestos, lockfiles, compilador/runner).
+ * No es "código de producción", pero un cambio aquí altera lo que se ejecuta o se valida:
+ * solo puede viajar en commits chore(...). Las zonas prod/test nunca son configuración crítica.
+ */
+export function isCriticalConfigFile(filePath) {
+  const norm = normalizeRepoPath(filePath);
+  if (!norm) return false;
+  const zone = classifyZone(norm);
+  if (zone === 'prod' || zone === 'test') return false;
+  return CRITICAL_CONFIG_PATTERNS.some((pattern) => pattern.test(norm));
 }
 
 export function extractModuleName(filePath) {
@@ -219,14 +279,66 @@ export function runGitOrThrow(args, errorMsg) {
   return res.stdout.trim();
 }
 
+export function parseDiffTreeRaw(rawDiff) {
+  if (!rawDiff) return { files: [], forbiddenModes: [] };
+  const parts = rawDiff.split('\0');
+  const files = [];
+  const forbiddenModes = [];
+  for (let i = 0; i < parts.length; i++) {
+    const piece = parts[i];
+    if (!piece) continue;
+    if (piece.length === 40 && !piece.startsWith(':')) continue;
+    if (piece.startsWith(':')) {
+      const meta = piece;
+      if (i + 1 < parts.length) {
+        const filePath = parts[i + 1];
+        if (filePath) {
+          files.push(filePath);
+          const metaParts = meta.split(/\s+/);
+          if (metaParts.length >= 2) {
+            const dstMode = metaParts[1];
+            if (dstMode === '120000' || dstMode === '160000') {
+              forbiddenModes.push([filePath, dstMode]);
+            }
+          }
+        }
+        i++;
+      }
+    }
+  }
+  return { files, forbiddenModes };
+}
+
 export function validateCommitList(commits, options = {}) {
   const errors = [];
   const activeRedScopes = new Set();
   const activeOpenSpecChanges = options.activeChanges || getActiveOpenSpecChanges();
 
-  for (const { hash, subject, changedFiles = [], body = '' } of commits) {
+  for (const commit of commits) {
+    const hash = commit.hash || '';
+    const subject = commit.subject || '';
+    const changedFiles = commit.changedFiles || [];
+    const body = commit.body || '';
+    const isMerge = Boolean(commit.isMerge || (commit.parents && commit.parents.length > 1));
+    const forbiddenModes = commit.forbiddenModes || [];
+
     const trimmedSubject = subject.trim();
     const shortHash = (hash || '0000000').slice(0, 7);
+
+    // C2: Prohibir commits de merge en la secuencia lineal de compuertas TDD
+    if (isMerge) {
+      errors.push(
+        `[${shortHash}] Violación de Causalidad TDD en '${trimmedSubject}': Los commits de merge no están permitidos en la secuencia de compuertas. Rebase la rama para mantener un historial lineal.`
+      );
+    }
+
+    // C3: Prohibir symlinks (120000) y submódulos (160000) en el repositorio
+    if (forbiddenModes.length > 0) {
+      const details = forbiddenModes.map(([f, m]) => `${f} (modo ${m})`).join(', ');
+      errors.push(
+        `[${shortHash}] Violación de Integridad en '${trimmedSubject}': No se permiten symlinks ni submódulos en el repositorio (detectado: ${details}).`
+      );
+    }
 
     // 1. Validar Nomenclatura de Compuerta
     const matchesPrefix = VALID_PREFIXES.some((pattern) => pattern.test(trimmedSubject));
@@ -244,6 +356,18 @@ export function validateCommitList(commits, options = {}) {
         const gateType = trimmedSubject.split(':')[0];
         errors.push(
           `[${shortHash}] Violación de Invariante de Compuerta en '${trimmedSubject}': Un commit de tipo no-código '${gateType}' NO puede modificar código de producción (detectado: ${prodFiles.join(', ')}). Use 'test(red)' seguido de 'feat(green)', 'fix' o 'refactor'.`
+        );
+      }
+    }
+
+    // F-02 (auditoría a95896c): la configuración crítica (CI, compuertas, reglas, manifiestos, lockfiles,
+    // tsconfig, vitest) altera lo que se ejecuta o valida: solo puede viajar en commits chore(...).
+    if (!/^chore(\([a-z0-9_/-]+\))?:/i.test(trimmedSubject)) {
+      const criticalFiles = changedFiles.filter(isCriticalConfigFile);
+      if (criticalFiles.length > 0) {
+        const gateType = trimmedSubject.split(':')[0];
+        errors.push(
+          `[${shortHash}] Violación de Invariante de Configuración Crítica en '${trimmedSubject}': Un commit '${gateType}' NO puede modificar configuración crítica (detectado: ${criticalFiles.join(', ')}). Use un commit 'chore(<scope>):' dedicado.`
         );
       }
     }
@@ -649,12 +773,74 @@ export function selfTest() {
     throw new Error('FALLÓ MITIGACIÓN F-NEW-02: verify-gates.mjs permitió explotar un RED obsoleto (stale RED) de otro ámbito.');
   }
 
+  // Caso 23 (auditoría a95896c): tabla de verdad compartida con Python (paridad por construcción)
+  const fixturesPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'path-policy.fixtures.json');
+  const fixtures = JSON.parse(fs.readFileSync(fixturesPath, 'utf-8'));
+  const fixtureMismatches = fixtures.filter(
+    (c) => isTestFile(c.path) !== c.test || isProductionFile(c.path) !== c.production || isCriticalConfigFile(c.path) !== c.critical
+  );
+  if (fixtureMismatches.length > 0) {
+    throw new Error(`FALLÓ CLASIFICACIÓN DE RUTAS (${fixtureMismatches.length}/${fixtures.length}): ${fixtureMismatches.map((c) => JSON.stringify(c.path)).join(', ')}`);
+  }
+
+  // Caso 24 (F-01 a95896c): RED con producción disfrazada de test bajo src/tests/ -> DEBE SER RECHAZADO
+  const redViaSrcTests = [
+    { hash: 'f01red1', subject: 'test(red)(calc): nested path under src/tests', changedFiles: ['src/tests/calc.ts'] },
+    { hash: 'f01grn1', subject: 'feat(green)(deterministic-causality-harness/calc): implement', changedFiles: ['src/calc.ts'] }
+  ];
+  const errsSrcTests = validateCommitList(redViaSrcTests);
+  if (!errsSrcTests.some((e) => e.includes('NO puede modificar código de producción')) ||
+      !errsSrcTests.some((e) => e.includes('DEBE modificar al menos un archivo de test'))) {
+    throw new Error('FALLÓ MITIGACIÓN F-01 (a95896c): verify-gates.mjs aceptó producción disfrazada de test bajo src/tests/.');
+  }
+
+  // Caso 25 (F-02 a95896c): configuración crítica solo en chore(...)
+  for (const [subject, files] of [
+    ['docs: update documentation', ['README.md', 'package.json']],
+    ['spec: tweak change', ['.github/workflows/gate-validator.yml']],
+    ['docs: update docs', ['pyproject.toml']],
+    ['triage: classify', ['requirements-test.txt']],
+    ['test(baseline): update characterization', ['tsconfig.json']],
+  ]) {
+    const errsCritical = validateCommitList([{ hash: 'f02xxxx', subject, changedFiles: files }]);
+    if (!errsCritical.some((e) => e.includes('Configuración Crítica'))) {
+      throw new Error(`FALLÓ MITIGACIÓN F-02 (a95896c): '${subject}' modificó configuración crítica sin ser chore(...).`);
+    }
+  }
+  const errsChoreCritical = validateCommitList([{ hash: 'f02chor', subject: 'chore(deps): bump dependencies', changedFiles: ['package.json', 'package-lock.json'] }]);
+  if (errsChoreCritical.length !== 0) {
+    throw new Error(`Falló aceptación de chore(...) legítimo sobre configuración crítica: ${errsChoreCritical.join(', ')}`);
+  }
+
   // Caso 22 (F-NEW-05): Rechazo estricto de referencias con prefijo '-' en isValidRefFormat
   if (isValidRefFormat('--version') || isValidRefFormat('-u') || isValidRefFormat('--help')) {
     throw new Error('FALLÓ MITIGACIÓN F-NEW-05: isValidRefFormat aceptó argumentos que comienzan con guión.');
   }
 
-  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo F-NEW-01, F-NEW-02, F-NEW-05, F-02 CWE-78, F-03 Scope Spoofing) pasaron exitosamente.');
+  // Caso 26 (C2): Rechazo de commits de merge
+  const mergeCommit = [
+    { hash: 'mrg0001', subject: 'feat(green)(calc): merge branch main', changedFiles: ['src/calc.ts'], isMerge: true }
+  ];
+  const errsMerge = validateCommitList(mergeCommit);
+  if (!errsMerge.some((e) => e.includes('commits de merge no están permitidos'))) {
+    throw new Error('FALLÓ MITIGACIÓN C2: verify-gates.mjs no rechazó un commit de merge en la secuencia de compuertas.');
+  }
+
+  // Caso 27 (C3): Rechazo de symlinks y submódulos
+  const symlinkCommit = [
+    { hash: 'sym0001', subject: 'test(red)(calc): symlink attack', changedFiles: ['tests/link.ts'], forbiddenModes: [['tests/link.ts', '120000']] }
+  ];
+  const errsSymlink = validateCommitList(symlinkCommit);
+  if (!errsSymlink.some((e) => e.includes('No se permiten symlinks ni submódulos'))) {
+    throw new Error('FALLÓ MITIGACIÓN C3: verify-gates.mjs no rechazó un archivo con modo symlink (120000).');
+  }
+
+  // Caso 28 (C5): Plegado de homóglifos en raíces de producción (ej. Cyrillic 'ѕ' en ѕrc/)
+  if (!isProductionFile('ѕrc/tests/calc.ts') || isTestFile('ѕrc/tests/calc.ts')) {
+    throw new Error('FALLÓ MITIGACIÓN C5: classifyZone no plegó homóglifo cirílico en raíz de producción.');
+  }
+
+  console.log('[SELF-TEST] ✅ Todas las pruebas (incluyendo F-NEW-01, F-NEW-02, F-NEW-05, F-02 CWE-78, F-03 Scope Spoofing, C1-C6) pasaron exitosamente.');
 }
 
 function checkCleanWorkingTree(allowDirty = false) {
@@ -744,8 +930,11 @@ function main() {
         }
 
         console.log(`[GATE-INFO] Repositorio en commit inicial (${headSha.slice(0, 7)}). Auditando el commit inicial...`);
-        const files = (runGitSafe(['diff-tree', '--no-commit-id', '--name-only', '-r', headSha]) || '').split('\n').filter(Boolean);
-        const errors = validateCommitList([{ hash: headSha, subject, changedFiles: files }]);
+        const parents = (runGitSafe(['rev-list', '--parents', '-n', '1', headSha]) || '').trim().split(/\s+/).slice(1);
+        const isMerge = parents.length > 1;
+        const rawDiff = runGitSafe(['diff-tree', '--root', '-m', '--first-parent', '-r', '--raw', '--no-renames', '-z', headSha]) || '';
+        const { files, forbiddenModes } = parseDiffTreeRaw(rawDiff);
+        const errors = validateCommitList([{ hash: headSha, subject, changedFiles: files, isMerge, parents, forbiddenModes }]);
         if (errors.length > 0) {
           console.error('\n❌ VIOLACIONES DE COMPUERTA DETECTADAS EN COMMIT INICIAL:');
           errors.forEach((err) => console.error(`  - ${err}`));
@@ -765,7 +954,7 @@ function main() {
   const revRange = `${baseSha}..${headSha}`;
   let rawCommits;
   try {
-    rawCommits = runGitOrThrow(['log', '--reverse', '--format=%H%x1f%s%x1f%b%x1e', revRange], `Fallo al obtener commits en el rango '${revRange}'`);
+    rawCommits = runGitOrThrow(['log', '--reverse', '--format=%H%x1f%s%x1f%b%x1f%P%x1e', revRange], `Fallo al obtener commits en el rango '${revRange}'`);
   } catch (err) {
     console.error(`❌ ERROR DE RESOLUCIÓN GIT:\n${err.message}`);
     process.exit(1);
@@ -781,8 +970,12 @@ function main() {
     const hash = parts[0] || '';
     const subject = parts[1] || '';
     const body = parts[2] || '';
-    const files = (runGitSafe(['diff-tree', '--no-commit-id', '--name-only', '-r', hash]) || '').split('\n').filter(Boolean);
-    return { hash, subject, changedFiles: files, body };
+    const parents = (parts[3] || '').trim().split(/\s+/).filter(Boolean);
+    const isMerge = parents.length > 1;
+
+    const rawDiff = runGitSafe(['diff-tree', '--root', '-m', '--first-parent', '-r', '--raw', '--no-renames', '-z', hash]) || '';
+    const { files, forbiddenModes } = parseDiffTreeRaw(rawDiff);
+    return { hash, subject, changedFiles: files, body, isMerge, parents, forbiddenModes };
   });
 
   console.log(`[GATE-VALIDATOR] Analizando ${commits.length} commits en ${revRange}...`);

@@ -18,8 +18,10 @@ Hardened contra CWE-78 (Command Injection) y Bypasses de Scope (F-02, F-03, F-07
 
 import sys
 import re
+import json
 import subprocess
 import argparse
+import unicodedata
 from pathlib import Path
 
 # Soporte seguro para codificación en Windows (cp1252) y UTF-8
@@ -54,55 +56,95 @@ LEGACY_PATTERNS = [
     r"baseline/",
 ]
 
+# Política de clasificación de rutas: UNA sola fuente de verdad (scripts/path-policy.json),
+# compartida con verify-gates.mjs. La paridad se verifica ejecutando la misma tabla de fixtures.
+PATH_POLICY = json.loads((Path(__file__).resolve().parent / "path-policy.json").read_text(encoding="utf-8"))
+
+_PRODUCTION_ROOTS = frozenset(PATH_POLICY["productionRoots"])
+_TEST_ROOTS = frozenset(PATH_POLICY["testRoots"])
+_EXCLUDED_ROOTS = frozenset(PATH_POLICY["excludedRoots"])
+_NON_TEST_BASENAMES = frozenset(PATH_POLICY["nonTestBasenames"])
+_EXECUTABLE_EXTENSIONS = frozenset(PATH_POLICY["executableExtensions"])
+_DOC_ONLY_EXTENSIONS = frozenset(PATH_POLICY["docOnlyExtensions"])
+_TEST_NAME_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PATH_POLICY["testNamePatterns"]]
+_CONFIG_FILE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PATH_POLICY["configFilePatterns"]]
+_CRITICAL_CONFIG_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PATH_POLICY["criticalConfigPatterns"]]
+
+_HOMOGLYPH_MAP = {
+    "\u0455": "s", "\u0441": "c", "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0445": "x", "\u0456": "i", "\u0458": "j"
+}
+_HOMOGLYPH_REGEX = re.compile(r"[\u0455\u0441\u0430\u0435\u043e\u0440\u0445\u0456\u0458]")
+
+def fold_homoglyphs(s: str) -> str:
+    if not s or not isinstance(s, str):
+        return ""
+    return _HOMOGLYPH_REGEX.sub(lambda m: _HOMOGLYPH_MAP.get(m.group(0), m.group(0)), s)
+
+def normalize_repo_path(file_path: str) -> str:
+    if not file_path or not isinstance(file_path, str):
+        return ""
+    norm = unicodedata.normalize("NFC", file_path).replace("\\", "/").lower()
+    norm = re.sub(r"/{2,}", "/", norm)
+    norm = re.sub(r"^(?:\./)+", "", norm)
+    return re.sub(r"^/+", "", norm)
+
+def _file_extension(norm: str) -> str:
+    base = norm.split("/")[-1]
+    dot = base.rfind(".")
+    return base[dot + 1:] if dot > 0 else ""
+
+def classify_zone(file_path: str) -> str | None:
+    """Zona de una ruta: el PRIMER segmento de directorio que sea un marcador decide ('prod'|'test'|'excluded')."""
+    norm = normalize_repo_path(file_path)
+    for raw_segment in norm.split("/")[:-1]:
+        segment = fold_homoglyphs(raw_segment)
+        if segment in _PRODUCTION_ROOTS:
+            return "prod"
+        if segment in _TEST_ROOTS:
+            return "test"
+        if segment in _EXCLUDED_ROOTS:
+            return "excluded"
+    return None
+
 def is_test_file(file_path: str) -> bool:
-    if not file_path:
+    norm = normalize_repo_path(file_path)
+    if not norm:
         return False
-    norm = file_path.replace("\\", "/").lower()
-    base_name = norm.split("/")[-1]
-    if base_name in ("__init__.py", "conftest.py"):
+    if norm.split("/")[-1] in _NON_TEST_BASENAMES:
         return False
-    # Debe ser código ejecutable de pruebas
-    if not re.search(r"\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$", norm, re.IGNORECASE):
+    if _file_extension(norm) not in _EXECUTABLE_EXTENSIONS:
         return False
-    if norm.startswith("tests/") or norm.startswith("test/") or "/tests/" in norm or "/test/" in norm:
+    zone = classify_zone(norm)
+    if zone in ("prod", "excluded"):
+        return False
+    if zone == "test":
         return True
-    if re.search(r"(\.spec|\.test|_test)\.[a-z0-9]+$", norm, re.IGNORECASE):
-        return True
-    if re.search(r"(?:^|/)test_[a-z0-9_-]+\.[a-z0-9]+$", norm, re.IGNORECASE):
-        return True
-    return False
+    return any(p.search(norm) for p in _TEST_NAME_PATTERNS)
 
 def is_production_file(file_path: str) -> bool:
-    if not file_path:
+    norm = normalize_repo_path(file_path)
+    if not norm:
         return False
-    norm = file_path.replace("\\", "/").lower()
+    zone = classify_zone(norm)
+    # Fail-closed: todo lo que vive bajo una raíz de producción es producción, salvo documentación pura.
+    if zone == "prod":
+        return _file_extension(norm) not in _DOC_ONLY_EXTENSIONS
+    if zone in ("test", "excluded"):
+        return False
     if is_test_file(norm):
         return False
-    if (
-        norm.startswith("openspec/") or "/openspec/" in norm or
-        norm.startswith("docs/") or "/docs/" in norm or
-        norm.startswith("scripts/") or "/scripts/" in norm or
-        norm.startswith(".agent/") or "/.agent/" in norm or
-        norm.startswith(".github/") or "/.github/" in norm or
-        norm.startswith(".cursor/") or "/.cursor/" in norm or
-        norm.startswith(".git/") or "/.git/" in norm or
-        "node_modules/" in norm or "dist/" in norm or "coverage/" in norm
-    ):
+    if any(p.search(norm) for p in _CONFIG_FILE_PATTERNS):
         return False
-    if (
-        norm.endswith(".md") or norm.endswith(".json") or norm.endswith(".yaml") or
-        norm.endswith(".yml") or norm.endswith(".toml") or norm.endswith(".txt") or
-        norm.endswith(".lock") or norm.endswith(".ini") or norm == ".gitignore" or
-        norm.endswith("/.gitignore") or norm == "license" or norm.endswith("/license") or
-        norm.endswith(".config.ts") or norm.endswith(".config.js") or
-        norm.endswith(".config.mjs") or norm.endswith(".config.cjs")
-    ):
+    return _file_extension(norm) in _EXECUTABLE_EXTENSIONS
+
+def is_critical_config_file(file_path: str) -> bool:
+    """Configuración crítica (CI, compuertas, reglas, manifiestos, lockfiles): solo viaja en commits chore(...)."""
+    norm = normalize_repo_path(file_path)
+    if not norm:
         return False
-    if norm.startswith("src/") or "/src/" in norm or norm.startswith("lib/") or "/lib/" in norm or norm.startswith("app/") or "/app/" in norm:
-        return True
-    if re.search(r"\.(ts|tsx|js|mjs|cjs|jsx|py|go|rs|java|kt|c|cpp|h|cs)$", norm, re.IGNORECASE):
-        return True
-    return False
+    if classify_zone(norm) in ("prod", "test"):
+        return False
+    return any(p.search(norm) for p in _CRITICAL_CONFIG_PATTERNS)
 
 def extract_module_name(file_path: str) -> str:
     if not file_path:
@@ -221,19 +263,81 @@ def run_git_or_throw(args: list[str], error_msg: str) -> str:
         raise RuntimeError(f"{error_msg}: {err}")
     return res.stdout.strip()
 
-def validate_commit_list(commits: list[tuple], active_changes: set[str] | None = None) -> list[str]:
+def parse_diff_tree_raw(raw_diff: str) -> tuple[list[str], list[tuple[str, str]]]:
+    if not raw_diff:
+        return [], []
+    parts = raw_diff.split("\x00")
+    files = []
+    forbidden_modes = []
+    i = 0
+    while i < len(parts):
+        piece = parts[i]
+        if not piece:
+            i += 1
+            continue
+        if len(piece) == 40 and not piece.startswith(":"):
+            i += 1
+            continue
+        if piece.startswith(":"):
+            meta = piece
+            if i + 1 < len(parts):
+                path = parts[i + 1]
+                if path:
+                    files.append(path)
+                    meta_parts = meta.split()
+                    if len(meta_parts) >= 2:
+                        dst_mode = meta_parts[1]
+                        if dst_mode in ("120000", "160000"):
+                            forbidden_modes.append((path, dst_mode))
+                i += 2
+                continue
+        i += 1
+    return files, forbidden_modes
+
+def validate_commit_list(commits: list, active_changes: set[str] | None = None) -> list[str]:
     errors = []
     active_red_scopes: set[str] = set()
     active_openspec_changes = active_changes if active_changes is not None else get_active_openspec_changes()
 
     for item in commits:
-        commit_hash = item[0]
-        subject = item[1]
-        changed_files = item[2]
-        body = item[3] if len(item) > 3 else ""
+        if isinstance(item, dict):
+            commit_hash = item.get("hash", "")
+            subject = item.get("subject", "")
+            changed_files = item.get("changed_files", item.get("changedFiles", []))
+            body = item.get("body", "")
+            is_merge = bool(item.get("is_merge", item.get("isMerge", False)))
+            forbidden_modes = item.get("forbidden_modes", item.get("forbiddenModes", []))
+        elif len(item) == 3:
+            commit_hash, subject, changed_files = item
+            body, is_merge, forbidden_modes = "", False, []
+        elif len(item) == 4:
+            commit_hash, subject, changed_files, body = item
+            is_merge, forbidden_modes = False, []
+        elif len(item) == 5:
+            commit_hash, subject, changed_files, body, is_merge = item
+            forbidden_modes = []
+        elif len(item) >= 6:
+            commit_hash, subject, changed_files, body, is_merge, forbidden_modes = item[:6]
+        else:
+            commit_hash, subject, changed_files, body, is_merge, forbidden_modes = "", "", [], "", False, []
 
         subject_stripped = subject.strip()
         short_hash = (commit_hash or "0000000")[:7]
+
+        # C2: Prohibir commits de merge en la secuencia lineal de compuertas TDD
+        if is_merge:
+            errors.append(
+                f"[{short_hash}] Violación de Causalidad TDD en '{subject_stripped}': "
+                f"Los commits de merge no están permitidos en la secuencia de compuertas. Rebase la rama para mantener un historial lineal."
+            )
+
+        # C3: Prohibir symlinks (120000) y submódulos (160000) en el repositorio
+        if forbidden_modes:
+            details = ", ".join(f"{f} (modo {m})" for f, m in forbidden_modes)
+            errors.append(
+                f"[{short_hash}] Violación de Integridad en '{subject_stripped}': "
+                f"No se permiten symlinks ni submódulos en el repositorio (detectado: {details})."
+            )
 
         # 1. Validar sintaxis de compuerta
         matched = any(re.match(pattern, subject_stripped, re.IGNORECASE) for pattern in VALID_PREFIXES)
@@ -253,6 +357,18 @@ def validate_commit_list(commits: list[tuple], active_changes: set[str] | None =
                     f"[{short_hash}] Violación de Invariante de Compuerta en '{subject_stripped}': "
                     f"Un commit de tipo no-código '{gate_type}' NO puede modificar código de producción (detectado: {', '.join(prod_files)}). "
                     f"Use 'test(red)' seguido de 'feat(green)', 'fix' o 'refactor'."
+                )
+
+        # F-02 (auditoría a95896c): la configuración crítica (CI, compuertas, reglas, manifiestos, lockfiles,
+        # tsconfig, vitest) altera lo que se ejecuta o valida: solo puede viajar en commits chore(...).
+        if not re.match(r"^chore(\([a-z0-9_/-]+\))?:", subject_stripped, re.IGNORECASE):
+            critical_files = [f for f in changed_files if is_critical_config_file(f)]
+            if critical_files:
+                gate_type = subject_stripped.split(":")[0]
+                errors.append(
+                    f"[{short_hash}] Violación de Invariante de Configuración Crítica en '{subject_stripped}': "
+                    f"Un commit '{gate_type}' NO puede modificar configuración crítica (detectado: {', '.join(critical_files)}). "
+                    f"Use un commit 'chore(<scope>):' dedicado."
                 )
 
         # 2. Registrar presencia de RED y sus ámbitos
@@ -585,8 +701,58 @@ def self_test():
     errs_stale = validate_commit_list(invalid_stale_red)
     assert any("no coincide con ningún test(red) activo previo" in e for e in errs_stale), "FALLÓ MITIGACIÓN F-NEW-02: verify_gates.py permitió explotar un RED obsoleto (stale RED) de otro ámbito"
 
+    # Caso 22 (auditoría a95896c): tabla de verdad compartida con Node (paridad por construcción)
+    fixtures = json.loads((Path(__file__).resolve().parent / "path-policy.fixtures.json").read_text(encoding="utf-8"))
+    fixture_mismatches = [
+        c["path"] for c in fixtures
+        if is_test_file(c["path"]) != c["test"]
+        or is_production_file(c["path"]) != c["production"]
+        or is_critical_config_file(c["path"]) != c["critical"]
+    ]
+    assert not fixture_mismatches, f"FALLÓ CLASIFICACIÓN DE RUTAS ({len(fixture_mismatches)}/{len(fixtures)}): {fixture_mismatches}"
+
+    # Caso 23 (F-01 a95896c): RED con producción disfrazada de test bajo src/tests/ -> DEBE SER RECHAZADO
+    red_via_src_tests = [
+        ("f01red1", "test(red)(calc): nested path under src/tests", ["src/tests/calc.ts"]),
+        ("f01grn1", "feat(green)(deterministic-causality-harness/calc): implement", ["src/calc.ts"]),
+    ]
+    errs_src_tests = validate_commit_list(red_via_src_tests)
+    assert any("NO puede modificar código de producción" in e for e in errs_src_tests) and \
+        any("DEBE modificar al menos un archivo de test" in e for e in errs_src_tests), \
+        "FALLÓ MITIGACIÓN F-01 (a95896c): verify_gates.py aceptó producción disfrazada de test bajo src/tests/"
+
+    # Caso 24 (F-02 a95896c): configuración crítica solo en chore(...)
+    for subject, files in [
+        ("docs: update documentation", ["README.md", "package.json"]),
+        ("spec: tweak change", [".github/workflows/gate-validator.yml"]),
+        ("docs: update docs", ["pyproject.toml"]),
+        ("triage: classify", ["requirements-test.txt"]),
+        ("test(baseline): update characterization", ["tsconfig.json"]),
+    ]:
+        errs_critical = validate_commit_list([("f02xxxx", subject, files)])
+        assert any("Configuración Crítica" in e for e in errs_critical), f"FALLÓ MITIGACIÓN F-02 (a95896c): '{subject}' modificó configuración crítica sin ser chore(...)"
+    errs_chore_critical = validate_commit_list([("f02chor", "chore(deps): bump dependencies", ["package.json", "package-lock.json"])])
+    assert not errs_chore_critical, f"Falló aceptación de chore(...) legítimo sobre configuración crítica: {errs_chore_critical}"
+
     # Caso 21 (F-NEW-05): Rechazo estricto de referencias con prefijo '-' en is_valid_ref_format
     assert not is_valid_ref_format("--version") and not is_valid_ref_format("-u") and not is_valid_ref_format("--help"), "FALLÓ MITIGACIÓN F-NEW-05: is_valid_ref_format aceptó argumentos que comienzan con guión"
+
+    # Caso 25 (C2): Rechazo de commits de merge
+    merge_commit = [
+        {"hash": "mrg0001", "subject": "feat(green)(calc): merge branch main", "changed_files": ["src/calc.ts"], "is_merge": True}
+    ]
+    errs_merge = validate_commit_list(merge_commit)
+    assert any("commits de merge no están permitidos" in e for e in errs_merge), "FALLÓ MITIGACIÓN C2: verify_gates.py no rechazó un commit de merge en la secuencia de compuertas"
+
+    # Caso 26 (C3): Rechazo de symlinks y submódulos
+    symlink_commit = [
+        {"hash": "sym0001", "subject": "test(red)(calc): symlink attack", "changed_files": ["tests/link.ts"], "forbidden_modes": [("tests/link.ts", "120000")]}
+    ]
+    errs_symlink = validate_commit_list(symlink_commit)
+    assert any("No se permiten symlinks ni submódulos" in e for e in errs_symlink), "FALLÓ MITIGACIÓN C3: verify_gates.py no rechazó un archivo con modo symlink (120000)"
+
+    # Caso 27 (C5): Plegado de homóglifos en raíces de producción (ej. Cyrillic 'ѕ' en ѕrc/)
+    assert is_production_file("ѕrc/tests/calc.ts") and not is_test_file("ѕrc/tests/calc.ts"), "FALLÓ MITIGACIÓN C5: classify_zone no plegó homóglifo cirílico en raíz de producción"
 
     print("[SELF-TEST] ✅ Todas las aserciones internas y pruebas adversariales pasaron con éxito.\n")
     return 0
@@ -667,8 +833,11 @@ def main():
                     return 0
 
                 print(f"[GATE-INFO] Repositorio en commit inicial ({head_sha[:7]}). Auditando el commit inicial...")
-                files = (run_git_safe(["diff-tree", "--no-commit-id", "--name-only", "-r", head_sha]) or "").splitlines()
-                errors = validate_commit_list([(head_sha, subject, files)])
+                parents = (run_git_safe(["rev-list", "--parents", "-n", "1", head_sha]) or "").split()[1:]
+                is_merge = len(parents) > 1
+                raw_diff = run_git_safe(["diff-tree", "--root", "-m", "--first-parent", "-r", "--raw", "--no-renames", "-z", head_sha]) or ""
+                files, forbidden = parse_diff_tree_raw(raw_diff)
+                errors = validate_commit_list([(head_sha, subject, files, "", is_merge, forbidden)])
                 if errors:
                     print("\n❌ VIOLACIONES DE COMPUERTA DETECTADAS EN COMMIT INICIAL:", file=sys.stderr)
                     for err in errors:
@@ -683,7 +852,7 @@ def main():
         return 1
     rev_range = f"{base_sha}..{head_sha}"
     try:
-        raw_commits = run_git_or_throw(["log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", rev_range], f"Fallo al obtener commits en el rango '{rev_range}'")
+        raw_commits = run_git_or_throw(["log", "--reverse", "--format=%H%x1f%s%x1f%b%x1f%P%x1e", rev_range], f"Fallo al obtener commits en el rango '{rev_range}'")
     except RuntimeError as err:
         print(f"❌ ERROR DE RESOLUCIÓN GIT:\n{err}", file=sys.stderr)
         return 1
@@ -701,8 +870,11 @@ def main():
         h = parts[0] if len(parts) > 0 else ""
         s = parts[1] if len(parts) > 1 else ""
         b = parts[2] if len(parts) > 2 else ""
-        files = (run_git_safe(["diff-tree", "--no-commit-id", "--name-only", "-r", h]) or "").splitlines()
-        commits.append((h, s, files, b))
+        p = parts[3].split() if len(parts) > 3 else []
+        is_merge = len(p) > 1
+        raw_diff = run_git_safe(["diff-tree", "--root", "-m", "--first-parent", "-r", "--raw", "--no-renames", "-z", h]) or ""
+        files, forbidden = parse_diff_tree_raw(raw_diff)
+        commits.append((h, s, files, b, is_merge, forbidden))
 
     print(f"[GATE-VALIDATOR] Analizando {len(commits)} commits en {rev_range}...")
     errors = validate_commit_list(commits)

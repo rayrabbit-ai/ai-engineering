@@ -16,9 +16,10 @@ This directory consolidates external and adversarial audits of the harness, alon
 | 2026-10-15 | [External Adversarial Forensic Audit](2026-10-15-auditoria-forense-adversarial.es.md) | External (causality and replay) | Historical |
 | 2026-10-15 | [Final Remediation Certification](certificacion-remediacion-final.es.md) | Internal; **superseded** by subsequent independent audits | Superseded |
 | 2026-10-15 | [Independent Forensic Report (Wave 1)](2026-10-15-informe-forense-independiente.es.md) | External: replay assertion verification, branch coverage & claim cleanup | Historical (remediated in `ed6a4c3`) |
-| 2026-10-15 | [Independent Forensic Audit (Wave 2 — `ed6a4c3`)](2026-10-15-auditoria-forense-ai-engineering.es.md) | External: confirmed 5/5 green CI checks and identified `F-01` (`guard-agent.mjs`) & `F-02` (`redteam-audit.mjs`) | **Current** — 100% remediated below |
+| 2026-10-15 | [Independent Forensic Audit (Wave 2 — `ed6a4c3`)](2026-10-15-auditoria-forense-ai-engineering.es.md) | External: confirmed 5/5 green CI checks and identified `F-01` (`guard-agent.mjs`) & `F-02` (`redteam-audit.mjs`) | Historical (remediated in `a95896c`) |
 | 2026-10-15 | [Authenticated GitHub Ruleset Snapshot](github-ruleset-main.json) | Verifiable JSON snapshot of the active Ruleset on `main` (`id: 25150565`, `enforcement: active`) | Current |
-| 2026-10-15 | [Heuristic Scanner Report](informe-redteam.es.md) | Automated (`redteam-audit.mjs`, 20 checks) | Current |
+| 2026-10-16 | [Independent Forensic Audit (Wave 3 — `a95896c`)](2026-10-16-auditoria-forense-a95896c.es.md) | External (Copilot GPT-6 Luna): verdict REJECTED due to route classification (`F-01`), critical config (`F-02`) and CI order (`R-03`) | **Current** — 100% remediated below |
+| 2026-10-16 | [Heuristic Scanner Report](informe-redteam.es.md) | Automated (`redteam-audit.mjs`, 24 checks) | Current |
 
 ### Status of Independent Audit Findings
 
@@ -31,16 +32,19 @@ This directory consolidates external and adversarial audits of the harness, alon
 | Wave 1 `F-05` | Scope collision `auth` / `billing/auth` | **Verified (`ed6a4c3`).** Not reproducible on HEAD; preserved as regression case in self-tests. |
 | Wave 2 `F-01` | `guard-agent.mjs` used `anchors.some(...)` and a 50-char threshold | **Fixed.** Now requires **all** mandatory anchors (`anchors.every(...)`), per-contract `minLength` (`2500` bytes for `INVARIANTS*`), all 15 numbered clauses (`1.`–`15.`), all 6 clauses in `ADVERSARIAL_AUDITOR*`, and routing rules `R1`–`R5` in `AGENTS*`. Includes `npm run verify:guard:self-test`. |
 | Wave 2 `F-02` | `redteam-audit.mjs` contained a stale static finding and overclaimed standard headers | **Fixed.** Removed the stale static finding; Domain 3 dynamically executes `guard-agent.mjs --self-test` and `validateGuardContracts`. Renamed CI job to `Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)`. |
+| Wave 3 `F-01` | Route classification permitted compilable code under `src/tests/` as test instead of production | **Fixed.** Implemented single declarative source of truth (`path-policy.json`) with deterministic first directory marker rule (`src/` -> production fail-closed), 63 shared fixtures executed in Node & Python, and runtime policy coherence engine (`verify-policy-coherence.mjs` invariants I1–I5). |
+| Wave 3 `F-02` | Critical configuration (`package.json`, `pyproject.toml`, `.github/**`, lockfiles, compiler) modifiable in `docs:` | **Fixed.** `isCriticalConfigFile` mandates dedicated `chore(...)` commits. |
+| Wave 3 `R-03` | `npm ci` ran before verifying unauthorized modification of gates | **Fixed.** Moved gate security barrier before dependency install, enforced `npm ci --ignore-scripts` and `persist-credentials: false`. |
 
 ---
 
 ## ⚖️ Scope: What It Is and What It Is Not
 
-**What it IS:** An SDD/TDD engineering template with CI-enforced commit gates (conventions, RED→GREEN scope coupling, OpenSpec linkage, parent-commit RED replay), a structural and semantic contract guardian (`guard-agent.mjs`), independent line and branch coverage thresholds (TS and Python), and an internal heuristic security and contract scanner (`redteam-audit.mjs`).
+**What it IS:** An SDD/TDD engineering template with CI-enforced commit gates (conventions, RED→GREEN scope coupling, OpenSpec linkage, parent-commit RED replay), single declarative path policy with runtime coherence verification (`verify-policy-coherence.mjs`), a structural and semantic contract guardian (`guard-agent.mjs`), independent line and branch coverage thresholds (TS and Python), and an internal heuristic security and contract scanner (`redteam-audit.mjs`).
 
 **What it IS NOT:**
 - A formal certification or compliance verification against external regulatory standards.
-- A compiler data-flow analyzer, generative fuzzer, automated mutation testing engine, or deep memory/HTTP auditor. The 10 domains in `redteam-audit.mjs` are 20 targeted heuristic and regression checks.
+- A compiler data-flow analyzer, generative fuzzer, automated mutation testing engine, or deep memory/HTTP auditor. The 10 domains in `redteam-audit.mjs` are 24 targeted heuristic and regression checks.
 - Cryptographic artifact provenance/attestation (for supply-chain attestations, refer to in-toto/Witness).
 - A standalone physical merge blocker: physical blocking on GitHub relies on the active Ruleset on `main` (see [`github-ruleset-main.json`](github-ruleset-main.json)).
 

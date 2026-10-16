@@ -9,6 +9,7 @@ garantizando el bloqueo físico e independiente de merges (F-05 mitigado).
 """
 
 import sys
+import re
 import json
 import subprocess
 import argparse
@@ -45,6 +46,18 @@ def main() -> int:
     if not repo:
         print("❌ Error: No se pudo determinar el repositorio.")
         print("Uso: python scripts/setup_branch_protection.py --repo <owner/repo> [--branch <branch>] [--reviews <N>]")
+        return 1
+
+    if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", repo) or ".." in repo:
+        print("❌ Error: --repo debe tener el formato owner/repo válido (ej. rayrabbit-ai/ai-engineering).")
+        return 1
+
+    if not re.match(r"^[a-zA-Z0-9/_.-]+$", args.branch) or ".." in args.branch or args.branch.startswith("-"):
+        print("❌ Error: --branch contiene caracteres no permitidos.")
+        return 1
+
+    if args.reviews < 0 or args.reviews > 10:
+        print("❌ Error: --reviews debe ser un número entero entre 0 y 10.")
         return 1
 
     payload = {

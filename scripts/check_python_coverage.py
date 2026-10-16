@@ -32,11 +32,15 @@ def main() -> int:
     args = parser.parse_args()
 
     cov_data = None
-    if args.report and Path(args.report).is_file():
+    if args.report is not None:
+        report_path = Path(args.report)
+        if not report_path.is_file():
+            print(f"❌ Error (Fail-Closed): El archivo de informe de cobertura '{report_path}' no existe.")
+            return 1
         try:
-            cov_data = json.loads(Path(args.report).read_text(encoding="utf-8"))
+            cov_data = json.loads(report_path.read_text(encoding="utf-8"))
         except Exception as error:
-            print(f"❌ Error al leer el informe de cobertura '{args.report}': {error}")
+            print(f"❌ Error al leer el informe de cobertura '{report_path}': {error}")
             return 1
     else:
         try:
@@ -52,11 +56,19 @@ def main() -> int:
             print("Asegúrese de haber ejecutado pytest con '--cov=src --cov-branch' previamente.")
             return 1
 
-    totals = cov_data.get("totals", {})
+    if not isinstance(cov_data, dict) or not isinstance(cov_data.get("totals"), dict):
+        print("❌ Error (Fail-Closed): El informe JSON de cobertura no contiene un bloque 'totals' válido.")
+        return 1
+
+    totals = cov_data["totals"]
     statements = totals.get("num_statements", 0)
     covered_lines = totals.get("covered_lines", 0)
     branches = totals.get("num_branches", 0)
     covered_branches = totals.get("covered_branches", 0)
+
+    if statements <= 0:
+        print("❌ Error (Fail-Closed): El informe de cobertura reporta 0 sentencias evaluadas (num_statements <= 0).")
+        return 1
 
     # 1. Calcular Cobertura de Líneas (Statements)
     if "percent_statements_covered" in totals and totals["percent_statements_covered"] is not None:
@@ -66,7 +78,7 @@ def main() -> int:
     elif "percent_covered" in totals and totals["percent_covered"] is not None:
         line_cov = float(totals["percent_covered"])
     else:
-        line_cov = 100.0 if statements == 0 else 0.0
+        line_cov = 0.0
 
     # 2. Calcular Cobertura de Ramas (Branches) - F-09 robusto contra variaciones de coverage.py
     if "percent_branches_covered" in totals and totals["percent_branches_covered"] is not None:
@@ -74,7 +86,7 @@ def main() -> int:
     elif branches > 0:
         branch_cov = (covered_branches / branches) * 100.0
     else:
-        branch_cov = 100.0 if branches == 0 else 0.0
+        branch_cov = 0.0
 
     print("\n" + "=" * 60)
     print("AUDITORÍA MECÁNICA DE COBERTURA PYTHON (F-09)")

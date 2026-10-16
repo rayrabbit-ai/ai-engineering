@@ -161,7 +161,7 @@ Este repositorio incluye puntos de entrada canónicos en la raíz para que los a
 │   ├── verify_red_failure.py    # Aserción física de fallo en fase RED (Python)
 │   ├── check_python_coverage.py # Verificador mecánico independiente de líneas y ramas
 │   ├── tdd-flow.mjs             # CLI de ergonomía TDD (tdd:red, tdd:green, tdd:refactor)
-│   ├── redteam-audit.mjs        # Escáner heurístico interno de seguridad y contratos (20 chequeos; no es certificación)
+│   ├── redteam-audit.mjs        # Escáner heurístico interno de seguridad y contratos (24 chequeos; no es certificación)
 │   ├── guard-agent.mjs          # Guardián estructural y semántico de contratos
 │   ├── setup_branch_protection.py # Configuración automatizada de branch protection
 │   └── setup-branch-protection.sh # Script bash para branch protection

@@ -17,7 +17,21 @@ jobs:
       - name: Checkout repositorio con historial completo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          persist-credentials: false
           fetch-depth: 0
+
+      - name: Bloqueo de alteración no autorizada de compuertas en PR (F-01)
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'allow-gate-update') && github.event.pull_request.author_association != 'OWNER' && github.event.pull_request.author_association != 'MEMBER'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          MODIFIED_GATES=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -E '(^|/)(\.github/workflows/|scripts/|\.agent/rules/|\.agent/workflows/|package\.json|package-lock\.json|pyproject\.toml|requirements)' || true)
+          if [ -n "$MODIFIED_GATES" ]; then
+            echo "❌ [GATE-SECURITY-FAIL] El PR modifica compuertas, reglas, dependencias o workflows críticos:"
+            echo "$MODIFIED_GATES"
+            echo "Para modificar contratos centrales, un maintainer debe etiquetar el PR con 'allow-gate-update'."
+            exit 1
+          fi
 
       - name: Configurar Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -26,8 +40,7 @@ jobs:
           cache: "npm"
 
       - name: Instalar dependencias bloqueadas
-        run: npm ci
-
+        run: npm ci --ignore-scripts
       - name: Configurar Python para Replay Polyglot
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
@@ -42,26 +55,19 @@ jobs:
       - name: Autochequeo de Reglas Adversariales y Causalidad (Self-Test)
         run: |
           node scripts/verify-gates.mjs --self-test
+          python scripts/verify_gates.py --self-test
           node scripts/verify-red-failure.mjs --self-test
+          python scripts/verify_red_failure.py --self-test
           node scripts/verify-historical-replay.mjs --self-test
+          node scripts/verify-policy-coherence.mjs --self-test
           node scripts/guard-agent.mjs --self-test
+
+      - name: Verificación de Coherencia Política↔Runtime (F-01)
+        run: node scripts/verify-policy-coherence.mjs
 
       - name: Verificación de Integridad de Agentes y Auditor Adversarial (Guard)
         run: |
           node scripts/guard-agent.mjs
-
-      - name: Bloqueo de alteración no autorizada de compuertas en PR (F-01)
-        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'allow-gate-update') && github.event.pull_request.author_association != 'OWNER' && github.event.pull_request.author_association != 'MEMBER'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          MODIFIED_GATES=$(git diff --name-only "origin/${BASE_REF}...HEAD" | grep -E '(^|/)(\.github/workflows/|scripts/|\.agent/rules/|\.agent/workflows/|package\.json|package-lock\.json|pyproject\.toml|requirements)' || true)
-          if [ -n "$MODIFIED_GATES" ]; then
-            echo "❌ [GATE-SECURITY-FAIL] El PR modifica compuertas, reglas, dependencias o workflows críticos:"
-            echo "$MODIFIED_GATES"
-            echo "Para modificar contratos centrales, un maintainer debe etiquetar el PR con 'allow-gate-update'."
-            exit 1
-          fi
 
       - name: Validar Nomenclatura y Causalidad TDD (Node.js)
         env:
@@ -89,6 +95,8 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Configurar Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -97,8 +105,7 @@ jobs:
           cache: "npm"
 
       - name: Instalar dependencias bloqueadas
-        run: npm ci
-
+        run: npm ci --ignore-scripts
       - name: Validar Coherencia de Especificaciones con versión local bloqueada
         run: |
           npm run spec:validate
@@ -109,6 +116,8 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Configurar Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -117,8 +126,7 @@ jobs:
           cache: "npm"
 
       - name: Instalar dependencias bloqueadas (npm ci estricto)
-        run: npm ci
-
+        run: npm ci --ignore-scripts
       - name: Auditar dependencias
         run: npm audit --audit-level=high
 
@@ -138,6 +146,7 @@ jobs:
       - name: Checkout repositorio con historial completo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Configurar Python
@@ -186,6 +195,7 @@ jobs:
       - name: Checkout repositorio con historial completo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Configurar Node.js
@@ -202,7 +212,7 @@ jobs:
 
       - name: Instalar dependencias bloqueadas
         run: |
-          npm ci
+          npm ci --ignore-scripts
           python -m pip install -r requirements-test.txt
           python -m pip install --no-deps --no-build-isolation -e .
 

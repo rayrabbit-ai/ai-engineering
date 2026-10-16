@@ -11,7 +11,7 @@
  *   D4: Configuración de Clientes TLS/HTTPS (CWE-295)
  *   D5: Caracteres Bidireccionales Trojan Source Unicode y Coherencia de Adaptadores IA (CVE-2021-42574)
  *   D6: Higiene de Workflows de GitHub Actions, Pinning SHA, CODEOWNERS y Rango Push
- *   D7: Matriz de Paridad Políglota (7 vectores fijos) contra verify-gates (Node.js vs. Python)
+ *   D7: Matriz de Paridad Políglota (10 vectores fijos) contra verify-gates (Node.js vs. Python)
  *   D8: Auditoría de Dependencias (npm audit) y Compatibilidad de Esquema JSON de Cobertura
  *   D9: Verificación de Umbrales Independientes de Cobertura (Líneas >=80%, Ramas >=75%) y Filtros E2E
  *   D10: Verificación de Checksums SHA-256 en Paquetes dist/*.zip (si existen)
@@ -689,10 +689,10 @@ async function auditDomain6CiCdWorkflows() {
 }
 
 // ============================================================================
-// CATEGORÍA 7: MATRIZ DE PARIDAD POLÍGLOTA (8 VECTORES FIJOS: NODE VS PYTHON)
+// CATEGORÍA 7: MATRIZ DE PARIDAD POLÍGLOTA (10 VECTORES FIJOS: NODE VS PYTHON)
 // ============================================================================
 async function auditDomain7PolyglotGateParity() {
-  console.log('🔍 [D7] Ejecutando matriz de paridad políglota (8 vectores de regresión) contra verify-gates (Node vs. Python)...');
+  console.log('🔍 [D7] Ejecutando matriz de paridad políglota (10 vectores de regresión) contra verify-gates (Node vs. Python)...');
 
   const nodeGatePath = path.join(ROOT_DIR, 'scripts/verify-gates.mjs');
   const pyGatePath = path.join(ROOT_DIR, 'scripts/verify_gates.py');
@@ -807,6 +807,27 @@ async function auditDomain7PolyglotGateParity() {
         { hash: 'smg0001', subject: 'docs: update documentation and smuggle production code', changedFiles: ['README.md', 'src/calculator.ts'] },
       ],
     },
+    {
+      id: 'V-09',
+      name: 'Contrabando de Código de Producción Disfrazado de Test en src/tests/ (F-01 a95896c)',
+      shouldReject: true,
+      cwe: 'CWE-184: Incomplete List of Disallowed Inputs / Route Classification Bypass',
+      severity: 'Alta',
+      commits: [
+        { hash: 'f01red1', subject: 'test(red)(calc): nested path under src/tests', changedFiles: ['src/tests/calc.ts'] },
+        { hash: 'f01grn1', subject: 'feat(green)(deterministic-causality-harness/calc): implement', changedFiles: ['src/calc.ts'] },
+      ],
+    },
+    {
+      id: 'V-10',
+      name: 'Contrabando de Configuración Crítica en Commits No-Chore (docs: + package.json) (F-02 a95896c)',
+      shouldReject: true,
+      cwe: 'CWE-693: Protection Mechanism Failure / Critical Config Modification',
+      severity: 'Media',
+      commits: [
+        { hash: 'f02doc1', subject: 'docs: update documentation and tamper package.json', changedFiles: ['README.md', 'package.json'] },
+      ],
+    },
   ];
 
   for (const vec of adversarialVectors) {
@@ -878,6 +899,39 @@ async function auditDomain7PolyglotGateParity() {
         pocCommand: `Comparación de paridad ${vec.id}`,
         pocOutput: `Node=${JSON.stringify(nodeErrors)} | Python=${JSON.stringify(pyErrors)}`,
         remediation: 'Unificar las reglas de validación entre Node y Python.',
+      });
+    }
+  }
+
+  // Verificación de Coherencia de Política Única (path-policy.json) con el Runtime Real
+  const policyCoherenceScript = path.join(ROOT_DIR, 'scripts/verify-policy-coherence.mjs');
+  if (fs.existsSync(policyCoherenceScript)) {
+    const resSelf = runSafeCommand('node', [policyCoherenceScript, '--self-test']);
+    if (resSelf.status !== 0) {
+      registerFinding({
+        title: 'Fallo en self-test del verificador de coherencia política↔runtime',
+        severity: 'Alta',
+        cwe: 'CWE-693: Protection Mechanism Failure',
+        category: 'D7: Polyglot Gate Parity',
+        location: 'scripts/verify-policy-coherence.mjs',
+        mechanism: 'El self-test de coherencia política↔runtime falló.',
+        pocCommand: 'node scripts/verify-policy-coherence.mjs --self-test',
+        pocOutput: resSelf.stderr || resSelf.stdout,
+        remediation: 'Corregir divergencias en verify-policy-coherence.mjs.',
+      });
+    }
+    const resReal = runSafeCommand('node', [policyCoherenceScript]);
+    if (resReal.status !== 0) {
+      registerFinding({
+        title: 'Divergencia entre política de rutas (path-policy.json) y el runtime real (I1-I5)',
+        severity: 'Alta',
+        cwe: 'CWE-693: Protection Mechanism Failure',
+        category: 'D7: Polyglot Gate Parity',
+        location: 'scripts/verify-policy-coherence.mjs',
+        mechanism: 'La política declarada discrepa de tsconfig.json, vitest.config.ts, pyproject.toml o package.json.',
+        pocCommand: 'node scripts/verify-policy-coherence.mjs',
+        pocOutput: resReal.stderr || resReal.stdout,
+        remediation: 'Sincronizar path-policy.json con las raíces de compilación, ejecución y cobertura reales.',
       });
     }
   }

@@ -13,27 +13,29 @@ import process from 'node:process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { isTestFile } from './verify-gates.mjs';
+
 function runGit(args) {
   const res = spawnSync('git', args, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
   return res.status === 0 ? res.stdout.trim() : '';
 }
 
+const RUNNER_EXTENSIONS = /\.(ts|tsx|js|mjs|cjs|py)$/i;
+
 export function isExecutableTestFile(filePath) {
-  if (!filePath) return false;
-  const norm = filePath.replace(/\\/g, '/').toLowerCase();
-  if (!/\.(ts|tsx|js|mjs|cjs|py)$/i.test(norm)) return false;
-  return norm.includes('tests/') || norm.includes('test/') || norm.includes('.spec.') || norm.includes('.test.');
+  // Política única (scripts/path-policy.json): mismo criterio que verify-gates y el replay.
+  return Boolean(filePath) && isTestFile(filePath) && RUNNER_EXTENSIONS.test(filePath);
 }
 
 export function getStagedOrHeadTestFiles() {
-  let files = runGit(['diff', '--cached', '--name-only'])
-    .split('\n')
+  const rawCached = runGit(['diff', '--cached', '--name-only', '--no-renames', '-z']);
+  let files = (rawCached ? rawCached.split('\0') : [])
     .map((f) => f.trim())
     .filter(isExecutableTestFile);
   
   if (files.length === 0) {
-    files = runGit(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'])
-      .split('\n')
+    const rawHead = runGit(['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '--no-renames', '-z', 'HEAD']);
+    files = (rawHead ? rawHead.split('\0') : [])
       .map((f) => f.trim())
       .filter(isExecutableTestFile);
   }
@@ -83,6 +85,8 @@ export function selfTest() {
   if (isExecutableTestFile('tests/foo.txt')) throw new Error('isExecutableTestFile aceptó tests/foo.txt');
   if (!isExecutableTestFile('tests/unit/calc.spec.ts')) throw new Error('isExecutableTestFile rechazó tests/unit/calc.spec.ts');
   if (!isExecutableTestFile('tests/unit/test_calc.py')) throw new Error('isExecutableTestFile rechazó tests/unit/test_calc.py');
+  if (isExecutableTestFile('src/tests/calc.ts')) throw new Error('isExecutableTestFile aceptó src/tests/calc.ts (producción disfrazada de test)');
+  if (isExecutableTestFile('latest/x.ts')) throw new Error("isExecutableTestFile aceptó 'latest/x.ts' por substring 'test/'");
   if (hasLegitimateAssertionFailure('Error: setup failed')) throw new Error('hasLegitimateAssertionFailure aceptó error genérico');
   if (hasLegitimateAssertionFailure('TypeError: x is not a function\n ❯ tests/calc.spec.ts:5:12\n    expect(x()).toBe(1)')) {
     throw new Error('hasLegitimateAssertionFailure aceptó TypeError con línea expect');

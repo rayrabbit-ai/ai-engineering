@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
+import { isTestFile } from './verify-gates.mjs';
 
 const ROOT_DIR = process.cwd();
 
@@ -233,8 +234,9 @@ export function verifyHistoricalReplay(baseRef, headRef) {
   for (const line of logLines) {
     const [hash, subject] = line.split('|');
     if (/^test\(red\)(?:\([a-z0-9_/-]+\))?:/i.test(subject)) {
-      const files = runGit(['diff-tree', '--no-commit-id', '--name-only', '-r', hash])
-        .split('\n')
+      const rawFiles = runGitSafe(['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '--no-renames', '-z', hash]) || '';
+      const files = rawFiles
+        .split('\0')
         .map((f) => f.trim())
         .filter(Boolean);
       redCommits.push({ hash, subject, files });
@@ -257,7 +259,7 @@ export function verifyHistoricalReplay(baseRef, headRef) {
       continue;
     }
 
-    const testFiles = rc.files.filter((f) => /^(?:[a-zA-Z0-9_-]+\/)?tests?\//i.test(f));
+    const testFiles = rc.files.filter((f) => isTestFile(f));
     if (testFiles.length === 0) {
       throw new Error(`[${shortHash}] Fraude TDD: El commit '${rc.subject}' no modificó ningún archivo de prueba.`);
     }

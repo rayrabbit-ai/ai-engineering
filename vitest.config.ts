@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    pool: 'vmThreads',
     globals: true,
     environment: 'node',
     include: ['tests/ts/**/*.{test,spec}.ts'],

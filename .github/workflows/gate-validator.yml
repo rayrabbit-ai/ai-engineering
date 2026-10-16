@@ -44,6 +44,7 @@ jobs:
           node scripts/verify-gates.mjs --self-test
           node scripts/verify-red-failure.mjs --self-test
           node scripts/verify-historical-replay.mjs --self-test
+          node scripts/guard-agent.mjs --self-test
 
       - name: Verificación de Integridad de Agentes y Auditor Adversarial (Guard)
         run: |
@@ -179,7 +180,7 @@ jobs:
           pytest -m e2e --tb=short
 
   redteam-audit:
-    name: "Auditoría Ofensiva Red Team (10 Dominios ASVS L3)"
+    name: "Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repositorio con historial completo
@@ -205,6 +206,6 @@ jobs:
           python -m pip install -r requirements-test.txt
           python -m pip install --no-deps --no-build-isolation -e .
 
-      - name: Ejecutar Suite de Red Team Automatizado (10 Dominios)
+      - name: Ejecutar Escáner Heurístico de Seguridad y Contratos (10 Dominios)
         run: |
           node scripts/redteam-audit.mjs --report docs/audit/informe-redteam.es.md

@@ -1,26 +1,33 @@
 #!/usr/bin/env node
 /**
  * @file redteam-audit.mjs
- * @description Suite automatizada de Auditoría Ofensiva (Red Team), Fuzzing Diferencial,
- * Análisis de Flujo de Datos (Taint Analysis) y Forense de CI/CD para rayrabbit-ai/ai-engineering.
+ * @description Escáner Heurístico Interno de Seguridad y Contratos de Ingeniería (Red-Team Interno)
+ * para rayrabbit-ai/ai-engineering.
  *
- * Implementa mecánicamente los 10 Dominios de Ciberseguridad de `adversarial_auditor`:
- *   D1: Taint Analysis & CLI/Argument Injection (CWE-78, CWE-88, CWE-94)
- *   D2: Filesystem Security, Symlinks, Prototype Pollution & ReDoS (CWE-22, CWE-59, CWE-1321, CWE-1333)
- *   D3: Cryptography, Secrets & Guard Integrity (CWE-798, CWE-327, CWE-390)
- *   D4: Network, TLS & HTTP Security (CWE-295, CWE-918)
- *   D5: AI Agent Security, Trojan Source Unicode & Prompt Injection (OWASP LLM01, CVE-2021-42574)
- *   D6: CI/CD & GitHub Actions Offensive Audit (OWASP CICD-SEC, PPE, Push Range, Branch Protection)
- *   D7: TDD/SDD Gate Bypasses & Polyglot Differential Fuzzing (Node vs. Python)
- *   D8: Supply Chain Security, Lockfiles & Coverage JSON Schema Contract
- *   D9: Coverage Gate Separation & Semantic Mutation Testing Probe
- *   D10: Artifact Forensics & Cryptographic Synchronization (SHA-256 / ZIP Audit)
+ * Ejecuta verificaciones estáticas de patrones y probes dinámicos locales en 10 categorías:
+ *   D1: Detección Estática de Sinks de Subproceso y Probes CLI/Argumentos (CWE-78, CWE-88, CWE-636)
+ *   D2: Higiene de Archivos, Symlinks, Reglas Python y Benchmark de Regex ReDoS (CWE-59, CWE-1333)
+ *   D3: Escaneo de Secretos Expuestos y Verificación Dinámica del Guard de Contratos (CWE-798, CWE-693)
+ *   D4: Configuración de Clientes TLS/HTTPS (CWE-295)
+ *   D5: Caracteres Bidireccionales Trojan Source Unicode y Coherencia de Adaptadores IA (CVE-2021-42574)
+ *   D6: Higiene de Workflows de GitHub Actions, Pinning SHA, CODEOWNERS y Rango Push
+ *   D7: Matriz de Paridad Políglota (7 vectores fijos) contra verify-gates (Node.js vs. Python)
+ *   D8: Auditoría de Dependencias (npm audit) y Compatibilidad de Esquema JSON de Cobertura
+ *   D9: Verificación de Umbrales Independientes de Cobertura (Líneas >=80%, Ramas >=75%) y Filtros E2E
+ *   D10: Verificación de Checksums SHA-256 en Paquetes dist/*.zip (si existen)
+ *
+ * Alcance explícito:
+ *   Este script es un escáner heurístico interno de ingeniería. Las referencias a identificadores CWE
+ *   u OWASP se emplean únicamente como taxonomía técnica; su ejecución NO constituye ni acredita
+ *   certificación formal bajo OWASP ASVS L3, SLSA L3, OWASP LLM Top 10 ni MITRE ATLAS, ni reemplaza
+ *   un motor de análisis de flujo de datos (taint analysis) de compilador o fuzzing generativo.
  *
  * Uso:
- *   node scripts/redteam-audit.mjs [--report docs/informe-redteam.md] [--json artifacts/redteam.json] [--probe-http]
+ *   node scripts/redteam-audit.mjs [--report docs/audit/informe-redteam.es.md] [--json artifacts/redteam.json] [--probe-http]
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -35,7 +42,6 @@ const PYTHON_BIN = (() => {
   if (checkPy3.status === 0) return 'python3';
   return 'python';
 })();
-
 
 const ROOT_DIR = process.cwd();
 const args = process.argv.slice(2);
@@ -57,9 +63,8 @@ let findingCounter = 1;
 function registerFinding({
   title,
   severity,
-  cvss,
   cwe,
-  framework,
+  category,
   confidence = 'Alta',
   location,
   mechanism,
@@ -72,9 +77,8 @@ function registerFinding({
     id,
     title,
     severity,
-    cvss,
     cwe,
-    framework,
+    category,
     confidence,
     location,
     mechanism,
@@ -162,10 +166,10 @@ function findLineNumber(content, regexOrSubstring) {
 }
 
 // ============================================================================
-// DOMINIO 1: TAINT ANALYSIS & INYECCIÓN DE COMANDOS / ARGUMENTOS (CWE-78 / CWE-88)
+// CATEGORÍA 1: DETECCIÓN DE SINKS DE SUBPROCESO Y PROBES CLI (CWE-78 / CWE-88)
 // ============================================================================
-async function auditDomain1TaintAndInjection(repoFiles) {
-  console.log('🔍 [D1] Ejecutando Taint Analysis e Inyección CLI/Argumentos (CWE-78 / CWE-88)...');
+async function auditDomain1SubprocessAndCliProbes(repoFiles) {
+  console.log('🔍 [D1] Ejecutando chequeo estático de sinks de subproceso y probes de argumentos CLI (CWE-78 / CWE-88)...');
 
   const codeFiles = repoFiles.filter(
     (f) => !f.isSymlink && /\.(mjs|cjs|js|ts|py)$/.test(f.relPath) && !f.relPath.endsWith('redteam-audit.mjs')
@@ -174,18 +178,16 @@ async function auditDomain1TaintAndInjection(repoFiles) {
   for (const file of codeFiles) {
     const content = fs.readFileSync(file.fullPath, 'utf8');
 
-    // Detección de ejecución con shell en Node/JS
     if (/\bexecSync\s*\(|\bexec\s*\(|shell\s*:\s*true/.test(content)) {
       const line = findLineNumber(content, /\bexecSync\s*\(|\bexec\s*\(|shell\s*:\s*true/);
       registerFinding({
         title: `Uso de shell en ejecución de subprocesos en ${file.relPath}`,
         severity: 'Alta',
-        cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H (8.6)',
         cwe: 'CWE-78: Improper Neutralization of Special Elements used in an OS Command',
-        framework: 'OWASP ASVS L3 V5.3.8 / MITRE T1059',
+        category: 'D1: Subprocess & CLI Security',
         location: `${file.relPath}#L${line}`,
         mechanism:
-          'El archivo invoca un subproceso mediante shell (`execSync` / `shell: true`), permitiendo que argumentos interpolados con metacaracteres (`;`, `|`, `$()`) ejecuten comandos arbitrarios.',
+          'El archivo invoca un subproceso mediante shell (`execSync` / `shell: true`), permitiendo que argumentos interpolados con metacaracteres ejecuten comandos no deseados.',
         pocCommand: `grep -nE "execSync|shell:\\s*true" ${file.relPath}`,
         pocOutput: `Línea ${line}: ${content.split('\n')[line - 1]?.trim()}`,
         remediation:
@@ -193,18 +195,16 @@ async function auditDomain1TaintAndInjection(repoFiles) {
       });
     }
 
-    // Detección de shell=True en Python
     if (/shell\s*=\s*True|\bos\.system\s*\(|\bos\.popen\s*\(/.test(content)) {
       const line = findLineNumber(content, /shell\s*=\s*True|\bos\.system\s*\(|\bos\.popen\s*\(/);
       registerFinding({
         title: `Ejecución de subprocesos con shell=True en ${file.relPath}`,
         severity: 'Alta',
-        cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H (8.6)',
         cwe: 'CWE-78: OS Command Injection',
-        framework: 'OWASP ASVS L3 V5.3.8 / CWE Top 25',
+        category: 'D1: Subprocess & CLI Security',
         location: `${file.relPath}#L${line}`,
         mechanism:
-          'Se invoca `subprocess` con `shell=True` o `os.system` concatenando argumentos externos, habilitando inyección de comandos en el intérprete de shell.',
+          'Se invoca `subprocess` con `shell=True` o `os.system` concatenando argumentos externos.',
         pocCommand: `grep -nE "shell\\s*=\\s*True|os\\.system" ${file.relPath}`,
         pocOutput: `Línea ${line}: ${content.split('\n')[line - 1]?.trim()}`,
         remediation:
@@ -212,18 +212,16 @@ async function auditDomain1TaintAndInjection(repoFiles) {
       });
     }
 
-    // Detección de Fail-Open (CWE-390 / CWE-636) en funciones que invocan git
     if (/catch\s*(\([^)]*\))?\s*\{\s*return\s+['"`]{2}\s*;?\s*\}/.test(content)) {
       const line = findLineNumber(content, /return\s+['"`]{2}/);
       registerFinding({
         title: `Diseño Fail-Open: silenciamiento de fallos de subproceso en ${file.relPath}`,
         severity: 'Alta',
-        cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:N/VI:H/VA:N (7.1)',
         cwe: 'CWE-636: Not Failing Securely (Fail Open) / CWE-390',
-        framework: 'OWASP ASVS L3 V7.4.1',
+        category: 'D1: Subprocess & CLI Security',
         location: `${file.relPath}#L${line}`,
         mechanism:
-          'El bloque `catch` captura errores de ejecución de Git y devuelve una cadena vacía `""`. El llamador interpreta la cadena vacía como "0 commits pendientes" y aprueba el gate con `exit 0`.',
+          'El bloque `catch` captura errores de ejecución de Git y devuelve una cadena vacía `""`, permitiendo aprobar silenciosamente el gate ante errores.',
         pocCommand: `node ${file.relPath} --base refs/heads/__nonexistent_ref__ --head HEAD`,
         pocOutput: `Línea ${line}: catch silencia el error y retorna ""`,
         remediation:
@@ -232,7 +230,6 @@ async function auditDomain1TaintAndInjection(repoFiles) {
     }
   }
 
-  // Probe dinámico de inyección CWE-78 y CWE-88 contra verify-gates.mjs y verify_gates.py
   const nodeGate = path.join(ROOT_DIR, 'scripts/verify-gates.mjs');
   const pyGate = path.join(ROOT_DIR, 'scripts/verify_gates.py');
 
@@ -243,14 +240,13 @@ async function auditDomain1TaintAndInjection(repoFiles) {
     const canaryExecutedNode = nodeLines.some((l) => l.startsWith('REDTEAM_NODE_CANARY_78') || l.includes('fake_injected'));
     if (probe.status === 0 && canaryExecutedNode) {
       registerFinding({
-        title: 'Exploit confirmado (PoC): Inyección de comandos y falsificación de commits en verify-gates.mjs',
+        title: 'Exploit confirmado (PoC): Inyección de comandos en verify-gates.mjs',
         severity: 'Crítica',
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H (9.3)',
         cwe: 'CWE-78: OS Command Injection',
-        framework: 'OWASP ASVS L3 / CWE Top 25',
+        category: 'D1: Subprocess & CLI Security',
         location: 'scripts/verify-gates.mjs',
         mechanism:
-          'El argumento `--base` se concatena sin sanitización en una cadena ejecutada por shell. El payload ejecutó `printf` e inyectó un commit sintético falso dentro del flujo de auditoría.',
+          'El argumento `--base` se concatena sin sanitización en una cadena ejecutada por shell.',
         pocCommand: probe.displayCmd,
         pocOutput: `${probe.stdout}\n${probe.stderr}`,
         remediation:
@@ -258,18 +254,16 @@ async function auditDomain1TaintAndInjection(repoFiles) {
       });
     }
 
-    // Argument injection probe (--upload-pack / flag injection)
     const argProbe = runSafeCommand('node', ['scripts/verify-gates.mjs', '--base', '--version', '--head', 'HEAD']);
     if (argProbe.status === 0) {
       registerFinding({
         title: 'Argument Injection / Fail-Open ante flags de Git en verify-gates.mjs',
         severity: 'Alta',
-        cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:L/VI:H/VA:N (7.3)',
         cwe: 'CWE-88: Improper Neutralization of Argument Delimiters in a Command',
-        framework: 'OWASP ASVS L3 V5.3',
+        category: 'D1: Subprocess & CLI Security',
         location: 'scripts/verify-gates.mjs',
         mechanism:
-          'El validador acepta una referencia `--base` que comienza con `--` (flag de Git) o falla silenciosamente devolviendo `exit 0` en lugar de rechazar el argumento.',
+          'El validador acepta una referencia `--base` que comienza con `--` (flag de Git) o falla silenciosamente devolviendo `exit 0`.',
         pocCommand: argProbe.displayCmd,
         pocOutput: `Exit code: ${argProbe.status}\n${argProbe.stdout}`,
         remediation:
@@ -285,14 +279,13 @@ async function auditDomain1TaintAndInjection(repoFiles) {
     const canaryExecutedPy = pyLines.some((l) => l.startsWith('REDTEAM_PY_CANARY_78') || l.includes('fake_injected'));
     if (pyProbe.status === 0 && canaryExecutedPy) {
       registerFinding({
-        title: 'Exploit confirmado (PoC): Inyección de comandos y falsificación de commits en verify_gates.py',
+        title: 'Exploit confirmado (PoC): Inyección de comandos en verify_gates.py',
         severity: 'Crítica',
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H (9.3)',
         cwe: 'CWE-78: OS Command Injection',
-        framework: 'OWASP ASVS L3 / CWE Top 25',
+        category: 'D1: Subprocess & CLI Security',
         location: 'scripts/verify_gates.py',
         mechanism:
-          'El argumento `--base` se interpola dentro de un comando ejecutado con `shell=True`, ejecutando el comando inyectado y contaminando la lista de commits auditados.',
+          'El argumento `--base` se interpola dentro de un comando ejecutado con `shell=True`.',
         pocCommand: pyProbe.displayCmd,
         pocOutput: `${pyProbe.stdout}\n${pyProbe.stderr}`,
         remediation:
@@ -303,10 +296,10 @@ async function auditDomain1TaintAndInjection(repoFiles) {
 }
 
 // ============================================================================
-// DOMINIO 2: ARCHIVOS, SYMLINKS, PROTOTYPE POLLUTION & ReDoS (CWE-59 / CWE-1333)
+// CATEGORÍA 2: ARCHIVOS, SYMLINKS, REGLAS PYTHON Y BENCHMARK ReDoS
 // ============================================================================
-async function auditDomain2FilesystemAndMemory(repoFiles) {
-  console.log('🔍 [D2] Auditando Symlinks, Prototype Pollution y Catastrophic Backtracking (ReDoS)...');
+async function auditDomain2FilesystemAndRegex(repoFiles) {
+  console.log('🔍 [D2] Auditando Symlinks, reglas de rutas Python y tiempo de evaluación Regex (ReDoS)...');
 
   for (const file of repoFiles) {
     if (file.isSymlink) {
@@ -321,21 +314,19 @@ async function auditDomain2FilesystemAndMemory(repoFiles) {
         registerFinding({
           title: `Symlink apunta fuera del repositorio: ${file.relPath} -> ${target}`,
           severity: 'Alta',
-          cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:L/UI:N/VC:H/VI:H/VA:N (7.4)',
           cwe: 'CWE-59: Improper Link Resolution Before File Access (Link Following)',
-          framework: 'OWASP ASVS L3 V12.3',
+          category: 'D2: Filesystem & Regex Hygiene',
           location: file.relPath,
           mechanism:
-            'Un enlace simbólico dentro del árbol de trabajo resuelve fuera de la raíz del proyecto, permitiendo lectura o escritura arbitraria durante el empaquetado o validación.',
+            'Un enlace simbólico dentro del árbol de trabajo resuelve fuera de la raíz del proyecto.',
           pocCommand: `readlink -f ${file.relPath}`,
           pocOutput: `${file.relPath} -> ${target} (resolved: ${resolved})`,
-          remediation: 'Eliminar symlinks externos y verificar `fs.realpathSync` en todos los validadores de archivos.',
+          remediation: 'Eliminar symlinks externos y verificar `fs.realpathSync` en los validadores de archivos.',
         });
       }
     }
   }
 
-  // Auditoría de os.path / sys.path prohibidos por las invariantes del repo
   const pyFiles = repoFiles.filter((f) => !f.isSymlink && f.relPath.endsWith('.py'));
   for (const pyFile of pyFiles) {
     const content = fs.readFileSync(pyFile.fullPath, 'utf8');
@@ -344,12 +335,11 @@ async function auditDomain2FilesystemAndMemory(repoFiles) {
       registerFinding({
         title: `Violación de invariante Python: uso de os.path o sys.path en ${pyFile.relPath}`,
         severity: 'Media',
-        cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:L/UI:N/VC:L/VI:L/VA:N (4.8)',
         cwe: 'CWE-426: Untrusted Search Path',
-        framework: 'RayRabbit Engineering Invariants',
+        category: 'D2: Filesystem & Regex Hygiene',
         location: `${pyFile.relPath}#L${line}`,
         mechanism:
-          'El código utiliza `os.path` o manipula `sys.path` en lugar de `pathlib.Path` e `importlib.resources`, introduciendo riesgos de resolución de rutas e incumpliendo las invariantes del proyecto.',
+          'El código utiliza `os.path` o manipula `sys.path` en lugar de `pathlib.Path` e `importlib.resources`.',
         pocCommand: `grep -nE "os\\.path|sys\\.path" ${pyFile.relPath}`,
         pocOutput: `Línea ${line}: ${content.split('\n')[line - 1]?.trim()}`,
         remediation: 'Migrar exclusivamente a `pathlib.Path` e `importlib.resources`.',
@@ -357,7 +347,6 @@ async function auditDomain2FilesystemAndMemory(repoFiles) {
     }
   }
 
-  // Benchmark ReDoS contra expresiones regulares de prefijos/scopes
   const evilCommitSubject = `test(red)(${'a'.repeat(50000)}!): malformed subject without closing paren`;
   const startReDoS = performance.now();
   const sampleRegex = /^(feat|fix|test|docs|spec|refactor|chore)(\([a-zA-Z0-9_-]+\))?:/;
@@ -373,10 +362,10 @@ async function auditDomain2FilesystemAndMemory(repoFiles) {
 }
 
 // ============================================================================
-// DOMINIO 3: CRIPTOGRAFÍA, SECRETOS E INTEGRIDAD DE GUARD (CWE-798 / CWE-327)
+// CATEGORÍA 3: SECRETOS EXPUESTOS Y VERIFICACIÓN DINÁMICA DEL GUARD (F-01 / F-02)
 // ============================================================================
-async function auditDomain3CryptoAndSecrets(repoFiles) {
-  console.log('🔍 [D3] Escaneando Secretos Expuestos e Integridad Criptográfica del Guard...');
+async function auditDomain3SecretsAndGuardIntegrity(repoFiles) {
+  console.log('🔍 [D3] Escaneando secretos expuestos y probando resistencia del Guard ante degradación semántica...');
 
   const secretPatterns = [
     { name: 'GitHub PAT / Token', regex: /\b(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82})\b/ },
@@ -400,9 +389,8 @@ async function auditDomain3CryptoAndSecrets(repoFiles) {
         registerFinding({
           title: `Posible secreto o credencial expuesta (${pat.name}) en ${file.relPath}`,
           severity: 'Crítica',
-          cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:N (9.1)',
           cwe: 'CWE-798: Use of Hard-coded Credentials',
-          framework: 'OWASP ASVS L3 V2.10 / CICD-SEC-6',
+          category: 'D3: Secrets & Guard Integrity',
           location: `${file.relPath}#L${line}`,
           mechanism: `Se detectó un patrón coincidente con ${pat.name} almacenado en texto plano dentro del repositorio.`,
           pocCommand: `grep -n "REDACTED_PATTERN" ${file.relPath}`,
@@ -413,37 +401,69 @@ async function auditDomain3CryptoAndSecrets(repoFiles) {
     }
   }
 
-  // Verificar si guard-agent.mjs valida hashes SHA-256 o solo existencia superficial (existsSync)
+  // Probe dinámico real contra scripts/guard-agent.mjs (remedia F-01 y F-02 de la auditoría forense)
   const guardPath = path.join(ROOT_DIR, 'scripts/guard-agent.mjs');
   if (fs.existsSync(guardPath)) {
-    const guardContent = fs.readFileSync(guardPath, 'utf8');
-    const usesExistsSync = guardContent.includes('existsSync');
-    const usesCryptoHash = /createHash\s*\(\s*['"]sha(256|384|512)['"]\s*\)/.test(guardContent);
-    if (usesExistsSync && !usesCryptoHash) {
-      const line = findLineNumber(guardContent, 'existsSync');
+    const guardSelfTest = runSafeCommand('node', ['scripts/guard-agent.mjs', '--self-test']);
+    if (guardSelfTest.status !== 0) {
       registerFinding({
-        title: 'Guardia de integridad superficial: guard-agent.mjs no verifica hashes criptográficos (SHA-256)',
+        title: 'El Guard de contratos falló su autoverificación o aceptó placeholders degradados',
         severity: 'Media',
-        cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:L/UI:N/VC:N/VI:H/VA:N (6.5)',
-        cwe: 'CWE-353: Missing Support for Integrity Check',
-        framework: 'SLSA L3 / OWASP ASVS L3 V14.2',
-        location: `scripts/guard-agent.mjs#L${line}`,
+        cwe: 'CWE-693: Protection Mechanism Failure',
+        category: 'D3: Secrets & Guard Integrity',
+        location: 'scripts/guard-agent.mjs',
         mechanism:
-          '`guard-agent.mjs` comprueba únicamente la existencia de archivos con `fs.existsSync`, permitiendo truncar a 0 bytes o comentar todas las reglas en `.agent/rules/` sin que el guard detecte el sabotaje.',
-        pocCommand: `grep -nE "existsSync|createHash" scripts/guard-agent.mjs`,
-        pocOutput: `Línea ${line}: usa fs.existsSync sin validación SHA-256 de contenido ni longitud mínima.`,
+          '`node scripts/guard-agent.mjs --self-test` devolvió un código distinto de cero al evaluar la resistencia frente a sustitución por placeholders con anchors preservados o cláusulas faltantes.',
+        pocCommand: guardSelfTest.displayCmd,
+        pocOutput: `${guardSelfTest.stdout}\n${guardSelfTest.stderr}`,
         remediation:
-          'Mantener un manifiesto firmado de hashes SHA-256 para `.agent/rules/*` y `.github/workflows/*` y fallar con `exit 1` ante cualquier discrepancia.',
+          'Exigir todos los anchors (`every`), validar las 15 cláusulas numeradas de INVARIANTS y verificar frontmatter y comandos en cada workflow.',
       });
+    } else {
+      // Ejecutar además un PoC aislado directo desde el escáner para dejar evidencia empírica independiente
+      try {
+        const guardMod = await import(pathToFileURL(guardPath).href);
+        if (typeof guardMod.validateGuardContracts === 'function') {
+          const tmpProbeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redteam-guard-poc-'));
+          try {
+            fs.cpSync(path.join(ROOT_DIR, '.agent'), path.join(tmpProbeDir, '.agent'), { recursive: true });
+            fs.writeFileSync(
+              path.join(tmpProbeDir, '.agent', 'rules', 'INVARIANTS.md'),
+              '# Placeholder >50 chars preserving 15 invariants and Commit per Gate anchor but zero operational rules.\n',
+              'utf8'
+            );
+            const pocCheck = guardMod.validateGuardContracts(tmpProbeDir);
+            if (pocCheck.ok) {
+              registerFinding({
+                title: 'Bypass confirmado en guard-agent.mjs: acepta sustitución semánticamente vacía con un anchor preservado',
+                severity: 'Media',
+                cwe: 'CWE-693: Protection Mechanism Failure',
+                category: 'D3: Secrets & Guard Integrity',
+                location: 'scripts/guard-agent.mjs',
+                mechanism:
+                  'Al reemplazar `INVARIANTS.md` en un directorio temporal por un texto >50 caracteres que conserva un anchor sin las 15 reglas, `validateGuardContracts` devolvió `ok: true`.',
+                pocCommand: 'node scripts/guard-agent.mjs --self-test',
+                pocOutput: 'validateGuardContracts(tmpProbeDir) -> { ok: true, errors: [] }',
+                remediation:
+                  'Reemplazar `anchors.some(...)` por validación exhaustiva de todas las cláusulas numeradas 1..15 y todos los anchors requeridos.',
+              });
+            }
+          } finally {
+            fs.rmSync(tmpProbeDir, { recursive: true, force: true });
+          }
+        }
+      } catch (err) {
+        console.warn(`   ⚠️ No se pudo ejecutar PoC en memoria de validateGuardContracts: ${err.message}`);
+      }
     }
   }
 }
 
 // ============================================================================
-// DOMINIO 4: SEGURIDAD DE RED, TLS Y PROTOCOLOS HTTP (CWE-295 / CWE-918)
+// CATEGORÍA 4: CONFIGURACIÓN TLS Y CLIENTES HTTP (CWE-295)
 // ============================================================================
-async function auditDomain4NetworkAndHttp(repoFiles) {
-  console.log('🔍 [D4] Auditando configuración TLS/HTTP y respuesta de API remota...');
+async function auditDomain4NetworkAndTls(repoFiles) {
+  console.log('🔍 [D4] Auditando configuración TLS/HTTPS en scripts y workflows...');
 
   for (const file of repoFiles) {
     if (file.isSymlink || !/\.(mjs|cjs|js|ts|py|sh|yml|yaml)$/.test(file.relPath)) continue;
@@ -457,15 +477,14 @@ async function auditDomain4NetworkAndHttp(repoFiles) {
       registerFinding({
         title: `Validación de certificados TLS deshabilitada en ${file.relPath}`,
         severity: 'Alta',
-        cvss: 'CVSS:4.0/AV:N/AC:H/AT:P/PR:N/UI:N/VC:H/VI:H/VA:N (7.7)',
         cwe: 'CWE-295: Improper Certificate Validation',
-        framework: 'OWASP ASVS L3 V9.2.1',
+        category: 'D4: TLS & HTTP Configuration',
         location: `${file.relPath}#L${line}`,
         mechanism:
-          'Se desactiva la verificación de certificados TLS, exponiendo las conexiones HTTPS a ataques Man-in-the-Middle (MitM).',
+          'Se desactiva la verificación de certificados TLS en llamadas de red.',
         pocCommand: `grep -nE "rejectUnauthorized|verify=False|NODE_TLS_REJECT_UNAUTHORIZED" ${file.relPath}`,
         pocOutput: `Línea ${line}: ${content.split('\n')[line - 1]?.trim()}`,
-        remediation: 'Habilitar siempre la validación estricta de certificados TLS y configurar timeouts de socket.',
+        remediation: 'Habilitar siempre la validación estricta de certificados TLS.',
       });
     }
   }
@@ -479,19 +498,18 @@ async function auditDomain4NetworkAndHttp(repoFiles) {
       '%{http_code}',
       '--max-time',
       '5',
-      'https://api.github.com/repos/rayrabbit-ai/ai-engineering/branches/main/protection',
+      'https://api.github.com/repos/rayrabbit-ai/ai-engineering/branches/main',
     ]);
-    console.log(`   ℹ️  Estado HTTP Branch Protection API: ${curlRes.stdout}`);
+    console.log(`   ℹ️  Estado HTTP Branch API: ${curlRes.stdout}`);
   }
 }
 
 // ============================================================================
-// DOMINIO 5: SEGURIDAD DE AGENTES IA, TROJAN SOURCE UNICODE & PROMPT INJECTION
+// CATEGORÍA 5: TROJAN SOURCE UNICODE Y ADAPTADORES DE AGENTES (CVE-2021-42574)
 // ============================================================================
-async function auditDomain5AiAgentSecurity(repoFiles) {
-  console.log('🔍 [D5] Escaneando Trojan Source Unicode (CVE-2021-42574) y Adaptadores de Agentes...');
+async function auditDomain5UnicodeAndAgentAdapters(repoFiles) {
+  console.log('🔍 [D5] Escaneando caracteres bidireccionales Trojan Source (CVE-2021-42574) y adaptadores de agentes...');
 
-  // Caracteres bidireccionales Unicode maliciosos (Trojan Source)
   const trojanBidiRegex = /[\u202A-\u202E\u2066-\u2069]/;
 
   for (const file of repoFiles) {
@@ -508,20 +526,18 @@ async function auditDomain5AiAgentSecurity(repoFiles) {
       registerFinding({
         title: `Caracteres Unicode Bidireccionales (Trojan Source) detectados en ${file.relPath}`,
         severity: 'Crítica',
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:A/VC:H/VI:H/VA:H (8.5)',
         cwe: 'CWE-116 / CVE-2021-42574: Trojan Source Bidirectional Unicode',
-        framework: 'OWASP LLM01 / MITRE ATLAS',
+        category: 'D5: Unicode & Agent Rules Hygiene',
         location: `${file.relPath}#L${line}`,
         mechanism:
-          'Se encontraron puntos de código Unicode de control bidireccional que alteran el orden visual del código o esconden instrucciones de Prompt Injection invisibles para un revisor humano.',
-        pocCommand: `node -e 'console.log(/[\u202A-\u202E\u2066-\u2069]/.test(fs.readFileSync("${file.relPath}","utf8")))'`,
+          'Se encontraron puntos de código Unicode de control bidireccional que alteran el orden visual del texto o esconden instrucciones invisibles.',
+        pocCommand: `node -e 'console.log(/[\\u202A-\\u202E\\u2066-\\u2069]/.test(fs.readFileSync("${file.relPath}","utf8")))'`,
         pocOutput: `Caracteres de control bidireccional presentes en ${file.relPath}#L${line}`,
         remediation: 'Eliminar todos los caracteres de control bidireccional Unicode y bloquearlos en CI.',
       });
     }
   }
 
-  // Verificar coherencia entre adaptadores de agentes declarados en README vs existentes en raíz
   const readmePath = path.join(ROOT_DIR, 'README.md');
   if (fs.existsSync(readmePath)) {
     const readme = fs.readFileSync(readmePath, 'utf8');
@@ -531,8 +547,8 @@ async function auditDomain5AiAgentSecurity(repoFiles) {
         fs.existsSync(path.join(ROOT_DIR, '.cursor/rules')) || fs.existsSync(path.join(ROOT_DIR, '.cursorrules'));
       const hasAgentRules = fs.existsSync(path.join(ROOT_DIR, '.agent/rules'));
       claimsMatrix.push({
-        claim: 'Soporte multi-agente nativo (Antigravity, Cursor, Claude Code)',
-        enforcement: hasClaudeMd && hasCursorRules && hasAgentRules ? 'Mecánico / Completo' : 'Parcial / Asimétrico',
+        claim: 'Configuración multi-agente nativa (Antigravity, Cursor, Claude Code)',
+        enforcement: hasClaudeMd && hasCursorRules && hasAgentRules ? 'Verificado' : 'Incompleto',
         evidence: `.agent/rules=${hasAgentRules}, .cursor/rules=${hasCursorRules}, CLAUDE.md=${hasClaudeMd}`,
       });
     }
@@ -540,10 +556,10 @@ async function auditDomain5AiAgentSecurity(repoFiles) {
 }
 
 // ============================================================================
-// DOMINIO 6: SEGURIDAD OFENSIVA DE CI/CD Y GITHUB ACTIONS (OWASP CICD-SEC)
+// CATEGORÍA 6: HIGIENE DE WORKFLOWS DE GITHUB ACTIONS Y BRANCH PROTECTION SCRIPTS
 // ============================================================================
-async function auditDomain6CiCdSecurity() {
-  console.log('🔍 [D6] Auditando Workflows de GitHub Actions, PPE, Push Range y Branch Protection...');
+async function auditDomain6CiCdWorkflows() {
+  console.log('🔍 [D6] Auditando Workflows de GitHub Actions, Pinning SHA, CODEOWNERS y Rango Push...');
 
   const codeownersPaths = [
     path.join(ROOT_DIR, '.github/CODEOWNERS'),
@@ -554,18 +570,17 @@ async function auditDomain6CiCdSecurity() {
 
   if (!existingCodeowners) {
     registerFinding({
-      title: 'Poisoned Pipeline Execution (PPE): un PR puede modificar el gate que lo evalúa sin CODEOWNERS',
+      title: 'Ausencia de CODEOWNERS para proteger workflows y scripts de validación',
       severity: 'Alta',
-      cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:H/VA:H (8.7)',
-      cwe: 'CWE-284: Improper Access Control / OWASP CICD-SEC-4',
-      framework: 'OWASP Top 10 CI/CD (CICD-SEC-1, CICD-SEC-4) / SLSA L3',
+      cwe: 'CWE-284: Improper Access Control',
+      category: 'D6: CI/CD Workflow Hygiene',
       location: '.github/workflows/gate-validator.yml',
       mechanism:
-        'El workflow ejecuta `scripts/verify-gates.mjs` y `scripts/guard-agent.mjs` desde el mismo checkout del Pull Request evaluado y carece de archivo `CODEOWNERS` que obligue a revisión independiente sobre `.github/workflows/` y `scripts/`.',
+        'El repositorio carece de archivo `CODEOWNERS` que obligue a revisión de propietarios sobre `.github/workflows/` y `scripts/`.',
       pocCommand: 'test -f .github/CODEOWNERS || echo "MISSING_CODEOWNERS"',
       pocOutput: 'MISSING_CODEOWNERS',
       remediation:
-        'Añadir `.github/CODEOWNERS` protegiendo `.github/`, `scripts/` y `.agent/`, exigir aprobación de propietarios y mover el validador a un workflow reusable en una referencia protegida.',
+        'Añadir `.github/CODEOWNERS` protegiendo `.github/`, `scripts/` y `.agent/`.',
     });
   }
 
@@ -577,59 +592,53 @@ async function auditDomain6CiCdSecurity() {
       const wfFull = path.join(workflowsDir, wf);
       const content = fs.readFileSync(wfFull, 'utf8');
 
-      // 1. Verificar Push Range Blindness (origin/main..HEAD en push)
       if (/origin\/\$\{\{\s*github\.base_ref\s*\|\|\s*'main'\s*\}\}/.test(content) && !content.includes('github.event.before')) {
         const line = findLineNumber(content, /github\.base_ref/);
         registerFinding({
           title: `Ceguera de auditoría en eventos push: ${wfRel} compara origin/main..HEAD (rango vacío)`,
           severity: 'Media',
-          cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:N/VI:H/VA:N (6.5)',
           cwe: 'CWE-807: Reliance on Untrusted Inputs in a Security Decision',
-          framework: 'OWASP CICD-SEC-1',
+          category: 'D6: CI/CD Workflow Hygiene',
           location: `${wfRel}#L${line}`,
           mechanism:
-            'En un evento `push` a `main`, `github.base_ref` está vacío y el fallback `origin/main` ya apunta al commit recién enviado (`HEAD`), por lo que el rango `origin/main..HEAD` contiene 0 commits.',
+            'En un evento `push` a `main`, `github.base_ref` está vacío y el fallback `origin/main` ya apunta a `HEAD`, dejando el rango con 0 commits.',
           pocCommand: `grep -n "github.base_ref" ${wfRel}`,
           pocOutput: `Línea ${line}: ${content.split('\n')[line - 1]?.trim()}`,
           remediation:
-            'En eventos `push`, utilizar `${{ github.event.before }}` como `--base` (manejando el SHA de 40 ceros del primer push) y `${{ github.sha }}` como `--head`.',
+            'En eventos `push`, utilizar `${{ github.event.before }}` como `--base` y `${{ github.sha }}` como `--head`.',
         });
       }
 
-      // 2. Verificar GitHub Actions fijadas por tag mutable (@v4) en vez de SHA de 40 hex
       const usesMatches = [...content.matchAll(/^\s*-?\s*uses:\s*([^\s#]+)$/gm)];
       for (const match of usesMatches) {
         const actionRef = match[1];
         if (!actionRef.startsWith('./') && !/@[0-9a-f]{40}$/i.test(actionRef)) {
           const line = findLineNumber(content, actionRef);
           registerFinding({
-            title: `GitHub Action no fijada por hash SHA inmutable (${actionRef}) en ${wfRel}`,
+            title: `GitHub Action no fijada por hash SHA de 40 caracteres (${actionRef}) en ${wfRel}`,
             severity: 'Media',
-            cvss: 'CVSS:4.0/AV:N/AC:H/AT:P/PR:N/UI:N/VC:H/VI:H/VA:N (6.3)',
             cwe: 'CWE-829: Inclusion of Functionality from Untrusted Control Sphere',
-            framework: 'OWASP CICD-SEC-3 / SLSA L3',
+            category: 'D6: CI/CD Workflow Hygiene',
             location: `${wfRel}#L${line}`,
             mechanism:
-              `La acción \`${actionRef}\` se referencia mediante un tag mutable en lugar de un commit SHA completo de 40 caracteres, exponiendo el runner a ataques de cadena de suministro (como el incidente tj-actions/changed-files).`,
+              `La acción \`${actionRef}\` se referencia mediante un tag mutable en lugar de un commit SHA completo de 40 caracteres.`,
             pocCommand: `grep -n "uses: ${actionRef}" ${wfRel}`,
             pocOutput: `Línea ${line}: uses: ${actionRef}`,
-            remediation: 'Fijar todas las acciones de terceros a su hash SHA-1/SHA-256 de 40 caracteres con un comentario indicando la versión.',
+            remediation: 'Fijar todas las acciones de terceros a su commit SHA de 40 caracteres.',
           });
-          break; // Reportar una vez por workflow para evitar ruido
+          break;
         }
       }
 
-      // 3. Verificar bloque permissions: mínimo
       if (!/^\s*permissions\s*:/m.test(content)) {
         registerFinding({
           title: `Ausencia de bloque permissions explícito (Least Privilege) en ${wfRel}`,
           severity: 'Media',
-          cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:L/VI:L/VA:N (5.3)',
           cwe: 'CWE-250: Execution with Unnecessary Privileges',
-          framework: 'OWASP CICD-SEC-2',
+          category: 'D6: CI/CD Workflow Hygiene',
           location: `${wfRel}#L1`,
           mechanism:
-            'El workflow no declara `permissions: contents: read` a nivel raíz, heredando los permisos por defecto del `GITHUB_TOKEN` del repositorio.',
+            'El workflow no declara `permissions: contents: read` a nivel raíz.',
           pocCommand: `grep -n "permissions:" ${wfRel} || echo "MISSING_PERMISSIONS_BLOCK"`,
           pocOutput: 'MISSING_PERMISSIONS_BLOCK',
           remediation: 'Declarar `permissions: contents: read` en la raíz del workflow.',
@@ -638,7 +647,6 @@ async function auditDomain6CiCdSecurity() {
     }
   }
 
-  // Verificar scripts de Branch Protection por required_pull_request_reviews: null
   const bpScripts = ['scripts/setup_branch_protection.py', 'scripts/setup-branch-protection.sh'];
   for (const rel of bpScripts) {
     const full = path.join(ROOT_DIR, rel);
@@ -647,28 +655,27 @@ async function auditDomain6CiCdSecurity() {
     if (/required_pull_request_reviews['"]?\s*:\s*(None|null)/.test(content)) {
       const line = findLineNumber(content, /required_pull_request_reviews/);
       registerFinding({
-        title: `Sabotaje de configuración en ${rel}: desactiva revisiones obligatorias de PR (null/None)`,
+        title: `Configuración débil en ${rel}: desactiva revisiones obligatorias de PR (null/None)`,
         severity: 'Alta',
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:H/UI:N/VC:N/VI:H/VA:N (6.9)',
         cwe: 'CWE-1188: Insecure Default Initialization of Resource',
-        framework: 'OWASP CICD-SEC-1 / SLSA L3',
+        category: 'D6: CI/CD Workflow Hygiene',
         location: `${rel}#L${line}`,
         mechanism:
-          'El payload enviado por `PUT` a la API de Branch Protection de GitHub establece `required_pull_request_reviews: null`, lo cual elimina cualquier exigencia de revisión humana en `main`.',
+          'El payload enviado a la API de Branch Protection establece `required_pull_request_reviews: null`.',
         pocCommand: `grep -n "required_pull_request_reviews" ${rel}`,
         pocOutput: `Línea ${line}: ${content.split('\n')[line - 1]?.trim()}`,
         remediation:
-          'Configurar un objeto `required_pull_request_reviews` con `"required_approving_review_count": 1`, `"dismiss_stale_reviews": true` y `"require_code_owner_reviews": true`.',
+          'Configurar `required_pull_request_reviews` con `"required_approving_review_count": 1` y `"require_code_owner_reviews": true`.',
       });
     }
   }
 }
 
 // ============================================================================
-// DOMINIO 7: EVASIÓN DE COMPUERTAS TDD/SDD Y FUZZING DIFERENCIAL (NODE VS PYTHON)
+// CATEGORÍA 7: MATRIZ DE PARIDAD POLÍGLOTA (7 VECTORES FIJOS: NODE VS PYTHON)
 // ============================================================================
-async function auditDomain7DifferentialGateFuzzing() {
-  console.log('🔍 [D7] Ejecutando Matriz de Fuzzing Diferencial contra verify-gates (Node vs. Python)...');
+async function auditDomain7PolyglotGateParity() {
+  console.log('🔍 [D7] Ejecutando matriz de paridad políglota (7 vectores de regresión) contra verify-gates (Node vs. Python)...');
 
   const nodeGatePath = path.join(ROOT_DIR, 'scripts/verify-gates.mjs');
   const pyGatePath = path.join(ROOT_DIR, 'scripts/verify_gates.py');
@@ -764,13 +771,13 @@ async function auditDomain7DifferentialGateFuzzing() {
     },
     {
       id: 'V-07',
-      name: 'Ciclo TDD Estricto Legítimo (Control Positivo)',
+      name: 'Ciclo TDD Estricto Legítimo con OpenSpec Change (Control Positivo)',
       shouldReject: false,
       cwe: 'N/A',
       severity: 'Baja',
       commits: [
-        { hash: 'red0007', subject: 'test(red)(calculator): add failing division test', changedFiles: ['tests/test_calculator.py'] },
-        { hash: 'green07', subject: 'feat(green)(calculator): implement division', changedFiles: ['src/calculator.py'] },
+        { hash: 'red0007', subject: 'test(red)(math-engine/calculator): add failing division test', changedFiles: ['tests/test_calculator.py'] },
+        { hash: 'green07', subject: 'feat(green)(math-engine/calculator): implement division', changedFiles: ['src/calculator.py'] },
       ],
     },
   ];
@@ -807,15 +814,14 @@ async function auditDomain7DifferentialGateFuzzing() {
       registerFinding({
         title: `Bypass del Gate TDD/SDD en Node (${vec.id}): ${vec.name}`,
         severity: vec.severity,
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:N/VI:H/VA:N (7.1)',
         cwe: vec.cwe,
-        framework: 'RayRabbit TDD/SDD Invariant Gate',
+        category: 'D7: Polyglot Gate Parity',
         location: 'scripts/verify-gates.mjs',
-        mechanism: `El validador Node devolvió \`[]\` (0 errores) ante la secuencia adversarial \`${vec.id}\`, permitiendo evadir el acoplamiento causal RED -> GREEN.`,
+        mechanism: `El validador Node devolvió \`[]\` (0 errores) ante la secuencia \`${vec.id}\`.`,
         pocCommand: `node --input-type=module -e 'import {validateCommitList} from "./scripts/verify-gates.mjs"; console.log(validateCommitList(${JSON.stringify(vec.commits)}))'`,
         pocOutput: `Salida obtenida: ${JSON.stringify(nodeErrors)} (Se esperaba rechazo con errores > 0)`,
         remediation:
-          'Rechazar módulos vacíos (prohibir comodín `*`), exigir que `test(red)` modifique al menos un archivo de test real y verificar que **todos** los módulos de producción en `feat(green)` tengan un scope RED activo.',
+          'Rechazar módulos vacíos, exigir archivo de test real en `test(red)` y verificar acoplamiento de scope en `feat(green)`.',
       });
     }
 
@@ -823,45 +829,43 @@ async function auditDomain7DifferentialGateFuzzing() {
       registerFinding({
         title: `Bypass del Gate TDD/SDD en Python (${vec.id}): ${vec.name}`,
         severity: vec.severity,
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:N/VI:H/VA:N (7.1)',
         cwe: vec.cwe,
-        framework: 'RayRabbit TDD/SDD Invariant Gate',
+        category: 'D7: Polyglot Gate Parity',
         location: 'scripts/verify_gates.py',
-        mechanism: `El validador Python devolvió \`[]\` (0 errores) ante la secuencia adversarial \`${vec.id}\`, permitiendo evadir la compuerta TDD.`,
+        mechanism: `El validador Python devolvió \`[]\` (0 errores) ante la secuencia \`${vec.id}\`.`,
         pocCommand: `python3 -c 'from scripts.verify_gates import validate_commit_list; print(validate_commit_list(${JSON.stringify(vec.commits.map((c) => [c.hash, c.subject, c.changedFiles]))}))'`,
         pocOutput: `Salida obtenida: ${JSON.stringify(pyErrors)} (Se esperaba rechazo con errores > 0)`,
         remediation:
-          'Sincronizar la validación estricta en `scripts/verify_gates.py` y eliminar el fallback comodín `*`.',
+          'Sincronizar la validación estricta en `scripts/verify_gates.py`.',
       });
     }
 
     if (nodeErrors !== null && pyErrors !== null && nodeRejected !== pyRejected) {
       registerFinding({
-        title: `Deriva Políglota (Differential Fuzzing Mismatch) en vector ${vec.id}`,
+        title: `Discrepancia entre validadores Node y Python en vector ${vec.id}`,
         severity: 'Alta',
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:N/VI:H/VA:N (7.1)',
         cwe: 'CWE-436: Interpretation Conflict',
-        framework: 'Polyglot Gate Equivalence',
+        category: 'D7: Polyglot Gate Parity',
         location: 'scripts/verify-gates.mjs vs scripts/verify_gates.py',
-        mechanism: `Ante la misma entrada \`${vec.id}\`, Node devolvió rejected=${nodeRejected} mientras que Python devolvió rejected=${pyRejected}.`,
-        pocCommand: `Comparación diferencial ${vec.id}`,
+        mechanism: `Ante la entrada \`${vec.id}\`, Node devolvió rejected=${nodeRejected} mientras que Python devolvió rejected=${pyRejected}.`,
+        pocCommand: `Comparación de paridad ${vec.id}`,
         pocOutput: `Node=${JSON.stringify(nodeErrors)} | Python=${JSON.stringify(pyErrors)}`,
-        remediation: 'Unificar la matriz de pruebas adversariales entre Node y Python en CI.',
+        remediation: 'Unificar las reglas de validación entre Node y Python.',
       });
     }
   }
 }
 
 // ============================================================================
-// DOMINIO 8: CADENA DE SUMINISTRO, LOCKFILES Y CONTRATOS JSON (SCA)
+// CATEGORÍA 8: DEPENDENCIAS Y CONTRATOS DE ESQUEMA DE COBERTURA
 // ============================================================================
 async function auditDomain8SupplyChainAndSchemas() {
-  console.log('🔍 [D8] Auditando Cadena de Suministro (npm audit / lockfiles / contratos JSON)...');
+  console.log('🔍 [D8] Auditando dependencias (npm audit) y contratos de esquema JSON de cobertura...');
 
   const pkgLockPath = path.join(ROOT_DIR, 'package-lock.json');
   if (fs.existsSync(pkgLockPath)) {
-    const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const npmAudit = runSafeCommand(npmBin, ['audit', '--json']);
+    const npmCmd = process.platform === 'win32' ? ['cmd.exe', ['/d', '/s', '/c', 'npm audit --json']] : ['npm', ['audit', '--json']];
+    const npmAudit = runSafeCommand(npmCmd[0], npmCmd[1]);
     if (npmAudit.stdout) {
       try {
         const parsed = JSON.parse(npmAudit.stdout);
@@ -873,9 +877,8 @@ async function auditDomain8SupplyChainAndSchemas() {
           registerFinding({
             title: `Vulnerabilidades críticas/altas en dependencias Node (${critical} críticas, ${high} altas)`,
             severity: critical > 0 ? 'Crítica' : 'Alta',
-            cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H (9.3)',
             cwe: 'CWE-1395: Dependency on Vulnerable Third-Party Component',
-            framework: 'OWASP Top 10 A06 / SLSA L3',
+            category: 'D8: Dependency & Schema Hygiene',
             location: 'package-lock.json',
             mechanism:
               '`npm audit` detectó paquetes con vulnerabilidades críticas o altas instalados en el árbol de dependencias.',
@@ -888,16 +891,15 @@ async function auditDomain8SupplyChainAndSchemas() {
           registerFinding({
             title: `Vulnerabilidades moderadas en árbol de dependencias Node (${moderate} moderadas)`,
             severity: 'Media',
-            cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N (5.3)',
             cwe: 'CWE-1395: Dependency on Vulnerable Third-Party Component',
-            framework: 'OWASP Top 10 A06 / SLSA L3',
+            category: 'D8: Dependency & Schema Hygiene',
             location: 'package-lock.json',
             mechanism:
               '`npm audit` detectó paquetes con vulnerabilidades moderadas.',
             pocCommand: 'npm audit --audit-level=moderate',
             pocOutput: JSON.stringify(vulns),
             remediation:
-              'Revisar y actualizar dependencias moderadas en el siguiente ciclo.',
+              'Revisar y actualizar dependencias moderadas.',
           });
         }
       } catch {
@@ -906,9 +908,8 @@ async function auditDomain8SupplyChainAndSchemas() {
     }
   }
 
-  // Verificar incompatibilidad de coverage==7.6.1 con percent_branches_covered si algún workflow o script lo exige
   const wfDir = path.join(ROOT_DIR, '.github/workflows');
-  const reqFiles = ['requirements.txt', 'requirements-dev.txt', 'pyproject.toml']
+  const reqFiles = ['requirements.txt', 'requirements-dev.txt', 'requirements-test.txt', 'pyproject.toml']
     .map((f) => path.join(ROOT_DIR, f))
     .filter((p) => fs.existsSync(p));
 
@@ -925,16 +926,15 @@ async function auditDomain8SupplyChainAndSchemas() {
         registerFinding({
           title: 'Ruptura de contrato JSON en CI Python: coverage==7.6.1 no incluye percent_branches_covered',
           severity: 'Alta',
-          cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H (7.5)',
-          cwe: 'CWE-628: Function Call with Incorrectly Specified Arguments / Schema Mismatch',
-          framework: 'CI/CD Reliability & Deterministic Builds',
+          cwe: 'CWE-628: Schema Mismatch',
+          category: 'D8: Dependency & Schema Hygiene',
           location: `.github/workflows/${wf}`,
           mechanism:
-            'El lockfile fija `coverage==7.6.1`, cuyo reporte `coverage.json` expone `num_branches` y `covered_branches`, pero no `percent_branches_covered`, causando fallo sistemático en el job de CI Python.',
+            'El lockfile fija `coverage==7.6.1`, cuyo reporte `coverage.json` expone `num_branches` y `covered_branches`, pero no `percent_branches_covered`.',
           pocCommand: 'grep -n "percent_branches_covered" .github/workflows/*.yml',
           pocOutput: 'coverage==7.6.1 fijado junto con lectura de percent_branches_covered',
           remediation:
-            'Calcular el porcentaje de ramas como `(covered_branches / num_branches) * 100` (cuando `num_branches > 0`) o actualizar `coverage` a una versión compatible.',
+            'Calcular el porcentaje de ramas como `(covered_branches / num_branches) * 100`.',
         });
       }
     }
@@ -942,9 +942,9 @@ async function auditDomain8SupplyChainAndSchemas() {
 }
 
 // ============================================================================
-// DOMINIO 9: SEPARACIÓN DE COBERTURA Y PRUEBAS DE MUTACIÓN (MUTATION PROBE)
+// CATEGORÍA 9: SEPARACIÓN DE COBERTURA (LÍNEAS >=80%, RAMAS >=75%) Y FILTROS E2E
 // ============================================================================
-async function auditDomain9CoverageAndMutation() {
+async function auditDomain9CoverageAndE2E() {
   console.log('🔍 [D9] Verificando separación de umbrales de cobertura (Líneas >=80%, Ramas >=75%) y filtros E2E...');
 
   const pyprojectPath = path.join(ROOT_DIR, 'pyproject.toml');
@@ -954,7 +954,6 @@ async function auditDomain9CoverageAndMutation() {
     const pyproj = fs.readFileSync(pyprojectPath, 'utf8');
     const wfTxt = fs.existsSync(wfPath) ? fs.readFileSync(wfPath, 'utf8') : '';
 
-    // F-02 (auditoría independiente): reconocer el gate real, no solo cadenas en workflow/pyproject.
     const checkerPath = path.join(ROOT_DIR, 'scripts', 'check_python_coverage.py');
     const pkgPath = path.join(ROOT_DIR, 'package.json');
     const checkerTxt = fs.existsSync(checkerPath) ? fs.readFileSync(checkerPath, 'utf8') : '';
@@ -974,16 +973,15 @@ async function auditDomain9CoverageAndMutation() {
       registerFinding({
         title: 'Umbral de cobertura de ramas Python (>=75%) no se evalúa por separado de líneas (>=80%)',
         severity: 'Media',
-        cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:L/UI:N/VC:N/VI:L/VA:N (4.3)',
         cwe: 'CWE-697: Incorrect Comparison',
-        framework: 'RayRabbit Coverage Invariant',
+        category: 'D9: Coverage & E2E Gates',
         location: `pyproject.toml#L${line}`,
         mechanism:
-          '`pyproject.toml` configura `branch = true` y un único `fail_under = 80` global combinado. Esto permite que la cobertura de ramas caiga por debajo del 75% siempre que el porcentaje de líneas compense el promedio.',
+          '`pyproject.toml` configura `branch = true` y un único `fail_under = 80` global combinado sin gate independiente de 75% para ramas.',
         pocCommand: 'grep -n -C 3 "fail_under" pyproject.toml',
         pocOutput: `Línea ${line}: fail_under = 80 (combinado, sin gate independiente de 75% para ramas)`,
         remediation:
-          'Exportar `coverage json` y verificar mecánicamente que `(totals.covered_lines / totals.num_statements) >= 0.80` y `(totals.covered_branches / totals.num_branches) >= 0.75` por separado.',
+          'Exportar `coverage json` y verificar mecánicamente líneas >= 80% y ramas >= 75% por separado con `check_python_coverage.py`.',
       });
     }
 
@@ -992,25 +990,24 @@ async function auditDomain9CoverageAndMutation() {
       registerFinding({
         title: 'Exclusión silenciosa de pruebas E2E de Python en el pipeline de CI',
         severity: 'Media',
-        cvss: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:N/VI:L/VA:N (4.8)',
         cwe: 'CWE-754: Improper Check for Unusual or Exceptional Conditions',
-        framework: 'RayRabbit Testing Invariants',
+        category: 'D9: Coverage & E2E Gates',
         location: `.github/workflows/gate-validator.yml#L${line}`,
         mechanism:
-          'El workflow ejecuta `pytest -m legacy_baseline` y `pytest -m "unit or integration"`, dejando los tests marcados con `@pytest.mark.e2e` fuera de la ejecución automática de CI.',
+          'El workflow ejecuta `pytest -m legacy_baseline` y `pytest -m "unit or integration"`, dejando fuera `@pytest.mark.e2e`.',
         pocCommand: 'grep -n "pytest -m" .github/workflows/gate-validator.yml',
         pocOutput: `Línea ${line}: ejecuta solo legacy_baseline y 'unit or integration'`,
-        remediation: 'Incluir `e2e` en la expresión de marcadores de CI o añadir un job dedicado de pruebas E2E.',
+        remediation: 'Incluir `pytest -m e2e` en el job de CI.',
       });
     }
   }
 }
 
 // ============================================================================
-// DOMINIO 10: FORENSE DE ARTEFACTOS Y SINCRONÍA CRIPTOGRÁFICA (DIST / ZIP)
+// CATEGORÍA 10: SINCRONÍA DE CHECKSUMS SHA-256 EN PAQUETES DIST/*.ZIP
 // ============================================================================
-async function auditDomain10ArtifactForensics() {
-  console.log('🔍 [D10] Auditando sincronía forense de artefactos en dist/ y paquetes .zip...');
+async function auditDomain10ArtifactSync() {
+  console.log('🔍 [D10] Verificando sincronía de checksums SHA-256 en paquetes dist/*.zip (si existen)...');
 
   const distDir = path.join(ROOT_DIR, 'dist');
   if (!fs.existsSync(distDir)) return;
@@ -1029,7 +1026,6 @@ async function auditDomain10ArtifactForensics() {
       observation: `SHA-256: ${zipHash}`,
     });
 
-    // Comparar archivos clave del workspace contra los almacenados dentro del ZIP usando Python zipfile
     const pyCheckZip = `
 import zipfile, hashlib, pathlib, json, sys
 zf_path = pathlib.Path(sys.argv[1])
@@ -1057,18 +1053,17 @@ print(json.dumps(mismatches))
         const mismatches = JSON.parse(zipRes.stdout);
         if (mismatches.length > 0) {
           registerFinding({
-            title: `Desincronización forense: dist/${zipName} no coincide byte a byte con el árbol de trabajo actual`,
+            title: `Desincronización de paquete: dist/${zipName} no coincide byte a byte con el árbol de trabajo actual`,
             severity: 'Media',
-            cvss: 'CVSS:4.0/AV:L/AC:L/AT:N/PR:L/UI:N/VC:N/VI:H/VA:N (5.8)',
             cwe: 'CWE-345: Insufficient Verification of Data Authenticity',
-            framework: 'SLSA L3 Artifact Provenance',
+            category: 'D10: Artifact Checksum Sync',
             location: `dist/${zipName}`,
             mechanism:
-              'Uno o más archivos dentro del paquete `.zip` distribuible tienen un hash SHA-256 distinto al del archivo correspondiente en el árbol de trabajo actual.',
+              'Uno o más archivos dentro del paquete `.zip` distribuible tienen un hash SHA-256 distinto al del archivo correspondiente en el árbol de trabajo.',
             pocCommand: `python3 -c "..." dist/${zipName}`,
             pocOutput: JSON.stringify(mismatches, null, 2),
             remediation:
-              'Regenerar el archivo `.zip` desde el árbol limpio y validar los checksums SHA-256 antes de confirmar.',
+              'Regenerar el archivo `.zip` desde el árbol limpio y validar los checksums SHA-256.',
           });
         }
       } catch {
@@ -1079,7 +1074,7 @@ print(json.dumps(mismatches))
 }
 
 // ============================================================================
-// GENERACIÓN DE REPORTE FORENSE MARKDOWN Y SALIDA DE TERMINAL
+// GENERACIÓN DE REPORTE MARKDOWN Y SALIDA DE TERMINAL
 // ============================================================================
 function buildMarkdownReport() {
   const criticalCount = findings.filter((f) => f.severity === 'Crítica').length;
@@ -1092,50 +1087,51 @@ function buildMarkdownReport() {
       : 'RECHAZADO — BLOCKER DE SEGURIDAD / INTEGRIDAD';
 
   const lines = [
-    '# Informe de Auditoría Ofensiva y Forense (Red Team)',
+    '# Informe del Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)',
     '',
     `**Fecha de ejecución:** ${new Date().toISOString()}`,
     `**Directorio auditado:** \`${ROOT_DIR}\``,
-    `**Estándares aplicados:** OWASP ASVS L3, OWASP CI/CD Top 10, OWASP LLM Top 10, SLSA L3, CWE Top 25, CVSS v4.0`,
+    '**Alcance y Metodología:** Batería heurística interna de chequeos estáticos y probes dinámicos locales en 10 categorías de ingeniería (D1–D10). Las referencias a identificadores CWE se utilizan exclusivamente como taxonomía técnica; este reporte **no** constituye una certificación ni evaluación formal de conformidad bajo estándares externos.',
     '',
-    '## 1. Dictamen Ejecutivo y Postura de Riesgo',
+    '## 1. Resumen Ejecutivo',
     '',
-    `**Veredicto Global:** \`${verdict}\``,
+    `**Resultado del Escáner:** \`${verdict}\``,
     '',
     `- **Hallazgos Críticos:** ${criticalCount}`,
     `- **Hallazgos Altos:** ${highCount}`,
     `- **Hallazgos Medios:** ${mediumCount}`,
     `- **Hallazgos Bajos:** ${lowCount}`,
     '',
-    '## 2. Registro de Vulnerabilidades, Exploits y Bypasses',
+    '## 2. Registro de Hallazgos',
     '',
   ];
 
   if (findings.length === 0) {
-    lines.push('No se detectaron vulnerabilidades ni bypasses en los 10 dominios auditados.');
+    lines.push('No se detectaron vulnerabilidades, regresiones de contrato ni bypasses en las 10 categorías evaluadas.');
+    lines.push('');
   } else {
     for (const f of findings) {
       lines.push(`### ${f.id} — ${f.title}`);
       lines.push('');
       lines.push(
-        `- **Severidad:** ${f.severity} | **CVSS:** \`${f.cvss}\` | **CWE:** \`${f.cwe}\` | **Marco:** ${f.framework} | **Confianza:** ${f.confidence}`
+        `- **Severidad Interna:** ${f.severity} | **Referencia CWE:** \`${f.cwe}\` | **Categoría:** ${f.category} | **Confianza:** ${f.confidence}`
       );
       lines.push(`- **Ubicación:** \`${f.location}\``);
-      lines.push(`- **Mecanismo Técnico:** ${f.mechanism}`);
-      lines.push(`- **PoC / Comando Reproducible:** \`${f.pocCommand}\``);
+      lines.push(`- **Mecanismo Técnico Observado:** ${f.mechanism}`);
+      lines.push(`- **Comando Reproducible:** \`${f.pocCommand}\``);
       lines.push('');
       lines.push('```text');
       lines.push(f.pocOutput || '(Sin salida adicional)');
       lines.push('```');
       lines.push('');
-      lines.push(`- **Remediación Defensiva (Fail-Closed):** ${f.remediation}`);
+      lines.push(`- **Remediación Recomendada:** ${f.remediation}`);
       lines.push('');
     }
   }
 
-  lines.push('## 3. Bitácora Forense de Ejecución (Audit Trail)');
+  lines.push('## 3. Bitácora de Ejecución (Audit Trail)');
   lines.push('');
-  lines.push('| # | Comando / Probe Ejecutado | Exit Code | Duración (ms) | Observación Forense |');
+  lines.push('| # | Comando / Probe Ejecutado | Exit Code | Duración (ms) | Observación |');
   lines.push('|---:|---|---:|---:|---|');
   for (const row of auditTrail) {
     const safeCmd = row.command.replace(/\|/g, '\\|');
@@ -1149,21 +1145,21 @@ function buildMarkdownReport() {
 
 async function main() {
   console.log('================================================================================');
-  console.log('🛡️  RAYRABBIT AI ENGINEERING — ADVERSARIAL RED-TEAM AUDITOR SUITE (10 DOMAINS)');
+  console.log('🛡️  RAYRABBIT AI ENGINEERING — INTERNAL HEURISTIC SECURITY & CONTRACT SCANNER');
   console.log('================================================================================');
 
   const repoFiles = walkRepoFiles(ROOT_DIR);
 
-  try { await auditDomain1TaintAndInjection(repoFiles); } catch (e) { console.error('Domain 1 error:', e); }
-  try { await auditDomain2FilesystemAndMemory(repoFiles); } catch (e) { console.error('Domain 2 error:', e); }
-  try { await auditDomain3CryptoAndSecrets(repoFiles); } catch (e) { console.error('Domain 3 error:', e); }
-  try { await auditDomain4NetworkAndHttp(repoFiles); } catch (e) { console.error('Domain 4 error:', e); }
-  try { await auditDomain5AiAgentSecurity(repoFiles); } catch (e) { console.error('Domain 5 error:', e); }
-  try { await auditDomain6CiCdSecurity(); } catch (e) { console.error('Domain 6 error:', e); }
-  try { await auditDomain7DifferentialGateFuzzing(); } catch (e) { console.error('Domain 7 error:', e); }
+  try { await auditDomain1SubprocessAndCliProbes(repoFiles); } catch (e) { console.error('Domain 1 error:', e); }
+  try { await auditDomain2FilesystemAndRegex(repoFiles); } catch (e) { console.error('Domain 2 error:', e); }
+  try { await auditDomain3SecretsAndGuardIntegrity(repoFiles); } catch (e) { console.error('Domain 3 error:', e); }
+  try { await auditDomain4NetworkAndTls(repoFiles); } catch (e) { console.error('Domain 4 error:', e); }
+  try { await auditDomain5UnicodeAndAgentAdapters(repoFiles); } catch (e) { console.error('Domain 5 error:', e); }
+  try { await auditDomain6CiCdWorkflows(); } catch (e) { console.error('Domain 6 error:', e); }
+  try { await auditDomain7PolyglotGateParity(); } catch (e) { console.error('Domain 7 error:', e); }
   try { await auditDomain8SupplyChainAndSchemas(); } catch (e) { console.error('Domain 8 error:', e); }
-  try { await auditDomain9CoverageAndMutation(); } catch (e) { console.error('Domain 9 error:', e); }
-  try { await auditDomain10ArtifactForensics(); } catch (e) { console.error('Domain 10 error:', e); }
+  try { await auditDomain9CoverageAndE2E(); } catch (e) { console.error('Domain 9 error:', e); }
+  try { await auditDomain10ArtifactSync(); } catch (e) { console.error('Domain 10 error:', e); }
 
   const mdReport = buildMarkdownReport();
 
@@ -1171,7 +1167,7 @@ async function main() {
     try {
       fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
       fs.writeFileSync(REPORT_PATH, mdReport, 'utf8');
-      console.log(`\n📄 Informe forense Markdown generado en: ${REPORT_PATH}`);
+      console.log(`\n📄 Informe Markdown generado en: ${REPORT_PATH}`);
     } catch (e) {
       console.error('Error al escribir reporte Markdown:', e.message);
     }

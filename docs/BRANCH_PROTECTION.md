@@ -43,8 +43,10 @@ In repository settings on GitHub (`Settings` -> `Branches` -> `Branch protection
 | `Validación de Especificaciones OpenSpec` | Rejects PRs with missing active OpenSpec changes, unlinked tasks, or invalid schema formatting |
 | `Suite TypeScript / Node.js & Cobertura` | Rejects PRs if Vitest tests fail, legacy baseline breaks, or coverage < 80% lines / < 75% branches |
 | `Suite Python & Cobertura` | Rejects PRs if pytest tests fail, baseline breaks, or coverage < 80% lines / < 75% branches |
-| `Auditoría Ofensiva Red Team (10 Dominios ASVS L3)` | Rejects PRs if critical or high severity security vulnerabilities are discovered by the automated suite |
+| `Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)` | Rejects PRs if critical or high severity security or contract findings are discovered by the automated scanner |
 | `Require Pull Request Reviews` (≥1 review + CODEOWNERS) | Enforces mandatory human code review and CODEOWNERS sign-off on gates, workflows, and rules |
+
+> **Verifiable Configuration Snapshot**: Because GitHub returns `HTTP 401/403` to unauthenticated readers querying `/repos/<owner>/<repo>/branches/main/protection` or `/rulesets`, an authenticated snapshot of the active GitHub Ruleset on `main` (`id: 25150565`, `enforcement: active`) is versioned in [`docs/audit/github-ruleset-main.json`](audit/github-ruleset-main.json).
 
 ---
 

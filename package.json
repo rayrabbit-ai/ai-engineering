@@ -57,6 +57,7 @@
     "check:coverage:py": "python scripts/check_python_coverage.py",
     "audit:redteam": "node scripts/redteam-audit.mjs --report docs/audit/informe-redteam.es.md",
     "guard": "node scripts/guard-agent.mjs",
+    "verify:guard:self-test": "node scripts/guard-agent.mjs --self-test",
     "prepare": "node scripts/guard-agent.mjs",
     "setup:branch-protection": "python scripts/setup_branch_protection.py"
   },

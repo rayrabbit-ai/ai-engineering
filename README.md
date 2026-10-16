@@ -154,14 +154,14 @@ This repository includes native root rule entrypoints so AI coding assistants lo
 │   ├── specs/                   # Living specifications
 │   └── changes/                 # Active changes (proposal, design, tasks)
 ├── scripts/
-│   ├── verify-gates.mjs         # Hardened Node.js commit gate auditor (CWE-78 immune)
-│   ├── verify_gates.py          # Hardened Python commit gate auditor (CWE-78 immune)
+│   ├── verify-gates.mjs         # Node.js commit gate auditor (execFileSync with argument arrays)
+│   ├── verify_gates.py          # Python commit gate auditor (subprocess without shell=True)
 │   ├── verify-historical-replay.mjs # Physical RED test failure replay in CI (git worktree)
 │   ├── verify-red-failure.mjs   # Physical verification of RED failure (Node.js)
 │   ├── verify_red_failure.py    # Physical verification of RED failure (Python)
 │   ├── check_python_coverage.py # Independent Line & Branch coverage verifier
 │   ├── tdd-flow.mjs             # Developer ergonomics CLI (tdd:red, tdd:green, tdd:refactor)
-│   ├── redteam-audit.mjs        # 10-domain automated adversarial red team engine
+│   ├── redteam-audit.mjs        # Internal heuristic security & contract scanner (13 checks; not certification)
 │   ├── guard-agent.mjs          # Semantic and structural contract guardian
 │   ├── setup_branch_protection.py # Automated GitHub branch protection setup
 │   └── setup-branch-protection.sh # Bash setup script for branch protection
@@ -206,7 +206,7 @@ npm run verify:replay:self-test
 npm run test:ts:coverage     # TypeScript
 npm run test:py:coverage     # Python
 
-# 8. Execute full automated 10-domain adversarial red team audit
+# 8. Execute internal heuristic security & contract scanner
 npm run audit:redteam
 ```
 

@@ -43,8 +43,10 @@ En la configuración del repositorio en GitHub (`Settings` -> `Branches` -> `Bra
 | `Validación de Especificaciones OpenSpec` | Rechaza PRs si hay cambios de código sin spec aprobada, tareas desvinculadas o formato inválido |
 | `Suite TypeScript / Node.js & Cobertura` | Rechaza si fallan tests, se rompe @legacy-baseline o cobertura < 80% líneas / < 75% ramas |
 | `Suite Python & Cobertura` | Rechaza si fallan tests pytest, se rompe baseline o cobertura < 80% líneas / < 75% ramas |
-| `Auditoría Ofensiva Red Team (10 Dominios ASVS L3)` | Rechaza PRs si se detectan vulnerabilidades de seguridad críticas o altas |
+| `Escáner Heurístico de Seguridad y Contratos (Red-Team Interno)` | Rechaza PRs si el escáner heurístico detecta vulnerabilidades o rupturas de contrato críticas o altas |
 | `Require Pull Request Reviews` (≥1 review + CODEOWNERS) | Exige revisión humana obligatoria y aprobación de CODEOWNERS en compuertas y reglas |
+
+> **Snapshot Verificable de Configuración**: Dado que la API de GitHub responde `HTTP 401/403` ante consultas no autenticadas sobre `/repos/<owner>/<repo>/branches/main/protection` o `/rulesets`, el repositorio conserva una captura autenticada del Ruleset activo en `main` (`id: 25150565`, `enforcement: active`) en [`docs/audit/github-ruleset-main.json`](audit/github-ruleset-main.json).
 
 ---
 

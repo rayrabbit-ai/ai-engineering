@@ -1,8 +1,10 @@
-# CERTIFICACIÓN DE REMEDIACIÓN Y VERIFICACIÓN FORENSE FINAL
+# REGISTRO DE REMEDIACIÓN DE ITERACIÓN INTERNA (HISTÓRICO — SUPERADO)
+
+> [!NOTE]
+> **Documento Histórico Superado:** Este archivo registra la remediación de la primera ola interna y ha sido **superado** por las auditorías forenses independientes posteriores. **No constituye una certificación formal (OWASP ASVS L3 ni SLSA L3).** Consulte el estado vigente en [`docs/audit/README.md`](README.md) y [`2026-10-15-auditoria-forense-ai-engineering.es.md`](2026-10-15-auditoria-forense-ai-engineering.es.md).
+
 **Objetivo:** `rayrabbit-ai/ai-engineering`  
-**Estándares de Cumplimiento:** OWASP ASVS L3 (v4.0.3/v5.0), OWASP CI/CD Top 10, MITRE ATT&CK / ATLAS, SLSA L3, CVSS v4.0.  
 **Fecha:** 15 de Octubre de 2026.  
-**Estado:** **100% REMEDIADO — COMPUERTAS MECÁNICAS ACTIVAS Y VERIFICADAS EN VERDE (EXIT CODE 0)**
 
 ---
 

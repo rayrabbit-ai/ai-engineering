@@ -84,7 +84,7 @@ Abre tu asistente de codificación preferido (Google Antigravity, Cursor, Claude
    # Validador Python
    npm run verify:gates:py
 
-   # Suite automatizada de red team de 10 dominios
+   # Escáner heurístico interno de seguridad y contratos
    npm run audit:redteam
 
    # O el workflow completo de auditoría adversarial

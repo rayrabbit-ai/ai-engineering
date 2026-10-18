@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: RayRabbit Community & Documentation
+    url: https://rayrabbit.site/
+    about: Official RayRabbit website, documentation, and architectural blueprints.
+  - name: Security Vulnerability Disclosure
+    url: https://github.com/rayrabbit-ai/ai-engineering/security/advisories/new
+    about: Confidential security disclosures and vulnerability reports.

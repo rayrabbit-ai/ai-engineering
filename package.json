@@ -64,7 +64,7 @@
     "setup:branch-protection": "python scripts/setup_branch_protection.py"
   },
   "devDependencies": {
-    "@fission-ai/openspec": "0.17.2",
+    "@fission-ai/openspec": "1.14.3",
     "@types/node": "24.19.2",
     "@vitest/coverage-v8": "5.0.4",
     "typescript": "^5.3.3",

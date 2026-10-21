@@ -66,7 +66,7 @@
   "devDependencies": {
     "@fission-ai/openspec": "0.17.2",
     "@types/node": "24.19.2",
-    "@vitest/coverage-v8": "5.0.4",
+    "@vitest/coverage-v8": "5.0.5",
     "typescript": "^5.3.3",
     "vitest": "5.0.4"
   }
